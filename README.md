@@ -17,5 +17,10 @@ Yet, remember. You shape the path to victory. Do you choose Dialog, or Combat?
    What it is? Grid-based tactical combat, building and evolving your Human Cell with every strategic step. Every level, the AI triggers its Cellular Mutation, weakening a          specific, crucial part of your developing Human Cell profile.
    What is your objective? ...
 
-
+To further elevate your experience, each game contains a unique story about the dystopian world of the game, where the ongoing war between humans and IA have destroyed the planet, crafted dynamically by the LLM. The unique story is generated and shattered into eight pieces. You receive the narrative's opening before the game begins, and the remaining seven pieces are hidden within the grid of each level.
+But remember: the knowladge has its costs. You must actively choose if you want to also learn the hidden story, as it requires spending a limited time and resources to find the piece on the grid. This creates a fascinating strategic tension. If you miss any part, it is lost forever, as the next round will feature a completely new challenge and different story pieces. Naturally, you can skip collecting the lore, but in that case, you'll never know its unique ending...
    
+THE TAILORED ENDING
+This is our final surprise: your ending. Masterfully tailored to your profile, each conclusion is individual and unique to your game. It doesn't depend on your final guess, but on who you are...
+
+Are you ready to face an opponent that knows you better than you know yourself?

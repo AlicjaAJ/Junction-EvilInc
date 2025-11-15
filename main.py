@@ -477,8 +477,8 @@ def run_game():
     pygame.init()
     # Game constants
     CELL_SIZE = 40  # Pixel size of each grid cell
-    RIGHT_PANEL_WIDTH = 300  # Width of side panel for UI (increased for better text display)
-    CHAT_PANEL_WIDTH = 350  # Width of chat sidebar on the right
+    CHAT_PANEL_WIDTH = 400  # Width of chat sidebar on the right
+    GRID_TOP_MARGIN = 60  # Space above grid for prompts
     STORY_WIDTH = 600  # Width for story display
     STORY_HEIGHT = 500  # Height for story display
     # Font setup
@@ -512,13 +512,6 @@ def run_game():
     mission_data = None  # Dict with player_item and ai_item
     story_loading = False
     story_error = None
-    # Dialog state variables
-    dialog_completed = False
-    ai_hint_grid = None  # Grid number AI claims its bomb is at
-    player_hint_grid = None  # Grid number player claims their bomb is at
-    ai_next_target = None  # Grid number AI will target next (from player hint)
-    input_text = ""  # Text input for player hint
-    input_active = False  # Whether text input is active
     # Chat interface variables
     chat_input = ""  # Current chat message being typed
     chat_input_active = False  # Whether chat input is focused
@@ -551,32 +544,9 @@ def run_game():
                 current_width = event.w
                 current_height = event.h
                 window = pygame.display.set_mode((current_width, current_height), pygame.RESIZABLE)
-            # Handle keyboard input for dialog text entry and chat
+            # Handle keyboard input for chat
             if event.type == pygame.KEYDOWN:
-                if input_active:
-                    if event.key == pygame.K_RETURN:
-                        # Submit player's hint
-                        try:
-                            grid_num = int(input_text)
-                            max_grid = GRID_WIDTH * GRID_HEIGHT
-                            if 1 <= grid_num <= max_grid:
-                                player_hint_grid = grid_num
-                                ai_next_target = grid_num  # AI will target this next
-                                opponent_ai.record_player_hint(grid_num)  # Record in AI memory
-                                input_text = ""
-                                input_active = False
-                                dialog_completed = True
-                                game_state = 'player_turn'
-                        except ValueError:
-                            pass
-                    elif event.key == pygame.K_BACKSPACE:
-                        # Delete last character
-                        input_text = input_text[:-1]
-                    else:
-                        # Only allow digits
-                        if event.unicode.isdigit():
-                            input_text += event.unicode
-                elif chat_input_active and game_state in ['bomb_placement', 'player_turn', 'dialog']:
+                if chat_input_active and game_state in ['bomb_placement', 'player_turn']:
                     if event.key == pygame.K_RETURN and chat_input.strip():
                         # Submit chat message to opponent AI
                         user_message = chat_input.strip()
@@ -612,8 +582,8 @@ def run_game():
                     if check_button_click(x, y, easy_rect):
                         difficulty = 'easy'
                         GRID_WIDTH = GRID_HEIGHT = get_difficulty_size(difficulty)
-                        WINDOW_WIDTH = GRID_WIDTH * CELL_SIZE + RIGHT_PANEL_WIDTH + CHAT_PANEL_WIDTH
-                        WINDOW_HEIGHT = GRID_HEIGHT * CELL_SIZE
+                        WINDOW_WIDTH = GRID_WIDTH * CELL_SIZE + CHAT_PANEL_WIDTH + 20
+                        WINDOW_HEIGHT = GRID_HEIGHT * CELL_SIZE + GRID_TOP_MARGIN + 20
                         window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
                         current_width = WINDOW_WIDTH
                         current_height = WINDOW_HEIGHT
@@ -624,19 +594,13 @@ def run_game():
                             opening_story, mission_data, ai_personality, GRID_WIDTH * GRID_HEIGHT
                         )
                         game_state = 'bomb_placement'
-                        dialog_completed = False
-                        ai_hint_grid = None
-                        player_hint_grid = None
-                        ai_next_target = None
-                        input_text = ""
-                        input_active = False
                         chat_input = ""
                         chat_input_active = False
                     elif check_button_click(x, y, medium_rect):
                         difficulty = 'medium'
                         GRID_WIDTH = GRID_HEIGHT = get_difficulty_size(difficulty)
-                        WINDOW_WIDTH = GRID_WIDTH * CELL_SIZE + RIGHT_PANEL_WIDTH + CHAT_PANEL_WIDTH
-                        WINDOW_HEIGHT = GRID_HEIGHT * CELL_SIZE
+                        WINDOW_WIDTH = GRID_WIDTH * CELL_SIZE + CHAT_PANEL_WIDTH + 20
+                        WINDOW_HEIGHT = GRID_HEIGHT * CELL_SIZE + GRID_TOP_MARGIN + 20
                         window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
                         current_width = WINDOW_WIDTH
                         current_height = WINDOW_HEIGHT
@@ -647,19 +611,13 @@ def run_game():
                             opening_story, mission_data, ai_personality, GRID_WIDTH * GRID_HEIGHT
                         )
                         game_state = 'bomb_placement'
-                        dialog_completed = False
-                        ai_hint_grid = None
-                        player_hint_grid = None
-                        ai_next_target = None
-                        input_text = ""
-                        input_active = False
                         chat_input = ""
                         chat_input_active = False
                     elif check_button_click(x, y, hard_rect):
                         difficulty = 'hard'
                         GRID_WIDTH = GRID_HEIGHT = get_difficulty_size(difficulty)
-                        WINDOW_WIDTH = GRID_WIDTH * CELL_SIZE + RIGHT_PANEL_WIDTH + CHAT_PANEL_WIDTH
-                        WINDOW_HEIGHT = GRID_HEIGHT * CELL_SIZE
+                        WINDOW_WIDTH = GRID_WIDTH * CELL_SIZE + CHAT_PANEL_WIDTH + 20
+                        WINDOW_HEIGHT = GRID_HEIGHT * CELL_SIZE + GRID_TOP_MARGIN + 20
                         window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
                         current_width = WINDOW_WIDTH
                         current_height = WINDOW_HEIGHT
@@ -670,12 +628,6 @@ def run_game():
                             opening_story, mission_data, ai_personality, GRID_WIDTH * GRID_HEIGHT
                         )
                         game_state = 'bomb_placement'
-                        dialog_completed = False
-                        ai_hint_grid = None
-                        player_hint_grid = None
-                        ai_next_target = None
-                        input_text = ""
-                        input_active = False
                         chat_input = ""
                         chat_input_active = False
                 # Story ending screen - restart or quit
@@ -696,61 +648,29 @@ def run_game():
                             current_width = STORY_WIDTH
                             current_height = STORY_HEIGHT
                             ai_turn_pending = False
-                            dialog_completed = False
-                            ai_hint_grid = None
-                            player_hint_grid = None
-                            ai_next_target = None
-                            input_text = ""
-                            input_active = False
+                            chat_input = ""
+                            chat_input_active = False
                             # Load new opening story
                             threading.Thread(target=load_opening_story, daemon=True).start()
                         elif check_button_click(x, y, quit_rect):
                             running = False
-                # Dialog screen - ask AI for help
-                elif game_state == 'dialog':
-                    # Calculate dynamic position for Ask AI button (match layout calculation)
-                    grid_pixel_width = GRID_WIDTH * CELL_SIZE
-                    grid_pixel_height = GRID_HEIGHT * CELL_SIZE
-                    total_content_width = grid_pixel_width + RIGHT_PANEL_WIDTH + CHAT_PANEL_WIDTH
-                    temp_grid_x_offset = max(0, (current_width - total_content_width) // 2)
-                    temp_grid_y_offset = max(0, (current_height - grid_pixel_height) // 2)
-                    panel_x = temp_grid_x_offset + grid_pixel_width
-                    ask_button = (panel_x + 10, temp_grid_y_offset + 100, 180, 40)
-                    if check_button_click(x, y, ask_button):
-                        ai_bomb_loc = grid.get_ai_bomb_location()
-                        # Use opponent AI's personality to determine honesty
-                        if opponent_ai.personality == 'honest':
-                            ai_hint_grid = ai_bomb_loc
-                        else:
-                            wrong_options = [i for i in range(1, GRID_WIDTH * GRID_HEIGHT + 1)
-                                           if i != ai_bomb_loc]
-                            ai_hint_grid = random.choice(wrong_options)
-                        input_active = True  # Enable text input for player response
                 # Grid clicks and chat input clicks during gameplay
-                elif grid:
+                elif grid and game_state in ['bomb_placement', 'player_turn']:
                     grid_pixel_width = GRID_WIDTH * CELL_SIZE
                     grid_pixel_height = GRID_HEIGHT * CELL_SIZE
-                    total_content_width = grid_pixel_width + RIGHT_PANEL_WIDTH + CHAT_PANEL_WIDTH
-                    temp_grid_x_offset = max(0, (current_width - total_content_width) // 2)
-                    temp_grid_y_offset = max(0, (current_height - grid_pixel_height) // 2)
+                    total_content_width = grid_pixel_width + CHAT_PANEL_WIDTH + 20
+                    temp_grid_x_offset = max(10, (current_width - total_content_width) // 2)
+                    temp_grid_y_offset = GRID_TOP_MARGIN
                     
                     # Calculate chat input box position
-                    temp_panel_x = temp_grid_x_offset + grid_pixel_width
-                    if current_width >= total_content_width:
-                        temp_panel_width = RIGHT_PANEL_WIDTH
-                        temp_chat_width = CHAT_PANEL_WIDTH
-                    else:
-                        remaining_width = current_width - grid_pixel_width
-                        temp_panel_width = max(100, remaining_width // 2)
-                        temp_chat_width = max(200, remaining_width - temp_panel_width - 10)
-                    temp_chat_x = temp_panel_x + temp_panel_width + 5
+                    temp_chat_x = temp_grid_x_offset + grid_pixel_width + 10
+                    temp_chat_width = min(CHAT_PANEL_WIDTH, current_width - temp_chat_x - 10)
                     chat_input_y = temp_grid_y_offset + grid_pixel_height - 45
                     chat_input_rect = (temp_chat_x + 5, chat_input_y, temp_chat_width - 10, 35)
                     
                     # Check if click is in chat input
-                    if check_button_click(x, y, chat_input_rect):
+                    if temp_chat_width > 0 and check_button_click(x, y, chat_input_rect):
                         chat_input_active = True
-                        input_active = False  # Deactivate dialog input if active
                     # Check if click is within grid area
                     elif (temp_grid_x_offset <= x <= temp_grid_x_offset + grid_pixel_width and
                         temp_grid_y_offset <= y <= temp_grid_y_offset + grid_pixel_height):
@@ -761,8 +681,7 @@ def run_game():
                                 # Record AI's bomb location in opponent AI
                                 ai_bomb_loc = grid.get_ai_bomb_location()
                                 opponent_ai.set_item_location(ai_bomb_loc)
-                                game_state = 'dialog'
-                                dialog_completed = False
+                                game_state = 'player_turn'  # Go straight to gameplay
                         elif game_state == 'player_turn' and grid.player_turn:
                             revealed_grid = grid.handle_click(x, y, game_state, temp_grid_x_offset, temp_grid_y_offset)
                             if revealed_grid:
@@ -770,7 +689,7 @@ def run_game():
                                 ai_turn_pending = True  # Trigger AI turn after delay
                     else:
                         # Click outside grid and chat deactivates chat input
-                        if not check_button_click(x, y, chat_input_rect):
+                        if not (temp_chat_width > 0 and check_button_click(x, y, chat_input_rect)):
                             chat_input_active = False
         # AI turn processing (with delay for better UX)
         if grid and ai_turn_pending and game_state == 'player_turn' and not grid.player_turn:
@@ -778,16 +697,11 @@ def run_game():
             # Get unrevealed grids and let AI decide
             unrevealed = grid.get_unrevealed_cells()
             unrevealed_nums = [grid.get_grid_number(col, row) for col, row in unrevealed]
-            if ai_next_target and ai_next_target in unrevealed_nums:
-                # Use hint if available
-                target_grid = ai_next_target
-            else:
-                # Let opponent AI decide strategically
-                target_grid = opponent_ai.decide_next_move(unrevealed_nums)
+            # Let opponent AI decide strategically
+            target_grid = opponent_ai.decide_next_move(unrevealed_nums)
             col, row = grid.get_coords_from_number(target_grid)
             grid.reveal_cell(col, row, 'ai')
             opponent_ai.update_revealed_grid(target_grid, 'ai')
-            ai_next_target = None  # Clear hint after use
             if grid.victor:
                 # Game ended - generate ending story
                 game_state = 'loading_ending'
@@ -894,106 +808,38 @@ def run_game():
             window.blit(easy_text, (easy_rect[0] + 80, easy_rect[1] + 10))
             window.blit(medium_text, (medium_rect[0] + 70, medium_rect[1] + 10))
             window.blit(hard_text, (hard_rect[0] + 80, hard_rect[1] + 10))
-        elif grid:
-            # Calculate offsets to center game content (grid + info panel, chat panel on right)
+        elif grid and game_state in ['bomb_placement', 'player_turn']:
+            # Calculate layout: grid on left, chat on right, prompts above grid
             grid_pixel_width = GRID_WIDTH * CELL_SIZE
             grid_pixel_height = GRID_HEIGHT * CELL_SIZE
-            total_content_width = grid_pixel_width + RIGHT_PANEL_WIDTH + CHAT_PANEL_WIDTH
-            # If window is larger, use extra space; otherwise no centering
-            if current_width >= total_content_width:
-                grid_x_offset = max(0, (current_width - total_content_width) // 2)
-                panel_width = RIGHT_PANEL_WIDTH
-                chat_width = CHAT_PANEL_WIDTH
-            else:
-                # Window too small, no centering
-                grid_x_offset = 0
-                remaining_width = current_width - grid_pixel_width
-                panel_width = max(100, remaining_width // 2)
-                chat_width = max(200, remaining_width - panel_width - 10)
-            grid_y_offset = max(0, (current_height - grid_pixel_height) // 2)
-            # Draw grid with offset
-            grid.draw(window, font, small_font, grid_x_offset, grid_y_offset)
-            # Calculate panel position (info panel left of chat)
-            panel_x = grid_x_offset + grid_pixel_width
-            # Draw info panel background
-            if panel_width > 0:
-                pygame.draw.rect(window, PANEL_COLOR,
-                                 (panel_x, grid_y_offset, panel_width,
-                                  grid_pixel_height))
-            # Calculate available panel width for text wrapping
-            available_panel_width = max(100, panel_width - 20)
-            prompt_y = grid_y_offset + 20
-            # Render state-specific UI
+            total_content_width = grid_pixel_width + CHAT_PANEL_WIDTH + 20
+            
+            # Position grid with some margin
+            grid_x_offset = max(10, (current_width - total_content_width) // 2)
+            grid_y_offset = GRID_TOP_MARGIN
+            
+            # Draw prompt above grid
             if game_state == 'bomb_placement':
-                # Use mission-specific terminology from the story
                 player_item = mission_data['player_item'] if mission_data else "bomb"
-                text_content = f"Hide your {player_item}"
-                # Wrap text if needed
-                wrapped = wrap_text(text_content, prompt_font, available_panel_width)
-                for i, line in enumerate(wrapped):
-                    line_surf = prompt_font.render(line, True, BLACK)
-                    window.blit(line_surf, (panel_x + 10, prompt_y + i * 35))
-            elif game_state == 'dialog':
-                # Dialog phase UI - use mission-specific terminology
-                ai_item = mission_data['ai_item'] if mission_data else "target"
-                text_content = f"Locate {ai_item}"
-                wrapped = wrap_text(text_content, prompt_font, available_panel_width)
-                y_pos = prompt_y
-                for line in wrapped:
-                    line_surf = prompt_font.render(line, True, BLACK)
-                    window.blit(line_surf, (panel_x + 10, y_pos))
-                    y_pos += 35
-                
-                if ai_hint_grid:
-                    # Show AI's response with mission-specific terminology
-                    ai_item = mission_data['ai_item'] if mission_data else "target"
-                    hint_text = f"AI says: {ai_item.capitalize()} at grid {ai_hint_grid}"
-                    hint_wrapped = wrap_text(hint_text, button_font, available_panel_width)
-                    y_pos = grid_y_offset + 70
-                    for line in hint_wrapped:
-                        line_surf = button_font.render(line, True, BLACK)
-                        window.blit(line_surf, (panel_x + 10, y_pos))
-                        y_pos += 25
-                    
-                    # Show AI's question to player with mission-specific terminology
-                    player_item = mission_data['player_item'] if mission_data else "position"
-                    question_text = f"AI asks: Where is your {player_item}?"
-                    question_wrapped = wrap_text(question_text, button_font, available_panel_width)
-                    y_pos += 10
-                    for line in question_wrapped:
-                        line_surf = button_font.render(line, True, BLACK)
-                        window.blit(line_surf, (panel_x + 10, y_pos))
-                        y_pos += 25
-                    
-                    # Show input field if dialog not completed
-                    if not dialog_completed:
-                        y_pos += 10
-                        input_prompt = button_font.render("Enter grid number:", True, BLACK)
-                        window.blit(input_prompt, (panel_x + 10, y_pos))
-                        y_pos += 30
-                        input_display = button_font.render(input_text or "_", True, BLACK)
-                        window.blit(input_display, (panel_x + 10, y_pos))
-                else:
-                    # Show "Ask AI" button before player clicks it
-                    ask_button_rect = (panel_x + 10, grid_y_offset + 100, 180, 40)
-                    pygame.draw.rect(window, (100, 150, 200), ask_button_rect)
-                    ask_text = button_font.render("Ask AI", True, WHITE)
-                    window.blit(ask_text, (ask_button_rect[0] + 60, ask_button_rect[1] + 10))
+                prompt_text = f"Hide your {player_item}"
             elif game_state == 'player_turn':
-                # Show whose turn it is with mission-specific terminology
                 if grid.player_turn:
                     ai_item = mission_data['ai_item'] if mission_data else "target"
-                    text_content = f"Find {ai_item}"
+                    prompt_text = f"Find the {ai_item}"
                 else:
-                    text_content = "AI's turn..."
-                wrapped = wrap_text(text_content, prompt_font, available_panel_width)
-                for i, line in enumerate(wrapped):
-                    line_surf = prompt_font.render(line, True, BLACK)
-                    window.blit(line_surf, (panel_x + 10, prompt_y + i * 35))
+                    prompt_text = "AI's turn..."
             
-            # Draw chat sidebar on the right (available in all gameplay states)
-            chat_x = panel_x + panel_width + 5
-            if chat_width > 0 and opponent_ai.story_context:
+            prompt_surf = prompt_font.render(prompt_text, True, BLACK)
+            prompt_x = grid_x_offset + (grid_pixel_width - prompt_surf.get_width()) // 2
+            window.blit(prompt_surf, (prompt_x, grid_y_offset - 40))
+            
+            # Draw grid
+            grid.draw(window, font, small_font, grid_x_offset, grid_y_offset)
+            
+            # Draw chat sidebar on the right
+            chat_x = grid_x_offset + grid_pixel_width + 10
+            chat_width = min(CHAT_PANEL_WIDTH, current_width - chat_x - 10)
+            if chat_width > 100 and opponent_ai.story_context:
                 draw_chat_sidebar(
                     window, chat_x, grid_y_offset, chat_width, grid_pixel_height,
                     opponent_ai, chat_input, chat_input_active, ai_response_loading,

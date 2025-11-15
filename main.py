@@ -28,6 +28,7 @@ import threading
 
 from cell import Cell
 from story_generator import StoryGenerator
+from opponent_ai import OpponentAI
 
 
 # Color constants for game visuals
@@ -192,7 +193,7 @@ class Grid:
             y_offset: Vertical offset of the grid
 
         Returns:
-            True if click was handled successfully, False otherwise
+            Grid number if click was handled, False otherwise
         """
         # Adjust for grid offset
         adjusted_x = x - x_offset
@@ -204,11 +205,12 @@ class Grid:
         if col < 0 or col >= self.width or row < 0 or row >= self.height:
             return False
         if game_state == 'bomb_placement':
-            return self.place_player_bomb(col, row)
+            success = self.place_player_bomb(col, row)
+            return self.get_grid_number(col, row) if success else False
         elif game_state == 'player_turn' and self.player_turn:
             if self.reveal_cell(col, row, 'player'):
                 self.player_turn = False  # Switch to AI turn
-                return True
+                return self.get_grid_number(col, row)
         return False
 
     def get_grid_number(self, col, row):
@@ -389,6 +391,75 @@ def wrap_text(text, font, max_width):
     return lines
 
 
+def draw_chat_sidebar(surface, x, y, width, height, opponent_ai, chat_input, chat_input_active,
+                      ai_response_loading, font, small_font):
+    """
+    Draw the chat interface sidebar.
+
+    Args:
+        surface: Pygame surface to draw on
+        x: X position of chat sidebar
+        y: Y position of chat sidebar
+        width: Width of chat sidebar
+        height: Height of chat sidebar
+        opponent_ai: OpponentAI instance for chat history
+        chat_input: Current user input text
+        chat_input_active: Whether chat input is focused
+        ai_response_loading: Whether AI is generating a response
+        font: Regular font for chat text
+        small_font: Small font for labels
+    """
+    # Background
+    pygame.draw.rect(surface, (240, 240, 245), (x, y, width, height))
+    pygame.draw.rect(surface, (100, 100, 120), (x, y, width, height), 2)
+    
+    # Title
+    title = font.render("AI Opponent Chat", True, (0, 0, 0))
+    surface.blit(title, (x + 10, y + 10))
+    
+    # Chat history area
+    chat_area_y = y + 45
+    chat_area_height = height - 95
+    pygame.draw.rect(surface, (255, 255, 255), (x + 5, chat_area_y, width - 10, chat_area_height))
+    pygame.draw.rect(surface, (180, 180, 180), (x + 5, chat_area_y, width - 10, chat_area_height), 1)
+    
+    # Display chat history
+    chat_history = opponent_ai.get_chat_history()
+    y_offset = chat_area_y + 5
+    line_height = 22
+    
+    for sender, message in chat_history[-10:]:  # Show last 10 messages
+        color = (50, 100, 200) if sender == 'player' else (200, 50, 50)
+        prefix = "You: " if sender == 'player' else "AI: "
+        
+        # Wrap message
+        wrapped = wrap_text(prefix + message, small_font, width - 30)
+        for line in wrapped:
+            if y_offset + line_height > chat_area_y + chat_area_height - 5:
+                break
+            text_surf = small_font.render(line, True, color)
+            surface.blit(text_surf, (x + 10, y_offset))
+            y_offset += line_height
+    
+    # Loading indicator
+    if ai_response_loading:
+        loading_text = small_font.render("AI is typing...", True, (150, 150, 150))
+        surface.blit(loading_text, (x + 10, y_offset))
+    
+    # Input box
+    input_y = y + height - 45
+    input_box_color = (100, 100, 250) if chat_input_active else (200, 200, 200)
+    pygame.draw.rect(surface, (255, 255, 255), (x + 5, input_y, width - 10, 35))
+    pygame.draw.rect(surface, input_box_color, (x + 5, input_y, width - 10, 35), 2)
+    
+    # Input text or placeholder
+    if chat_input:
+        input_surf = small_font.render(chat_input, True, (0, 0, 0))
+    else:
+        input_surf = small_font.render("Type your message...", True, (150, 150, 150))
+    surface.blit(input_surf, (x + 10, input_y + 8))
+
+
 def run_game():
     """
     Main game loop and state management.
@@ -406,11 +477,8 @@ def run_game():
     pygame.init()
     # Game constants
     CELL_SIZE = 40  # Pixel size of each grid cell
-<<<<<<< HEAD
-    RIGHT_PANEL_WIDTH = 200  # Width of side panel for UI
-=======
     RIGHT_PANEL_WIDTH = 300  # Width of side panel for UI (increased for better text display)
->>>>>>> 8329a42 (add llm for story generation and narration)
+    CHAT_PANEL_WIDTH = 350  # Width of chat sidebar on the right
     STORY_WIDTH = 600  # Width for story display
     STORY_HEIGHT = 500  # Height for story display
     # Font setup
@@ -419,13 +487,6 @@ def run_game():
     button_font = pygame.font.SysFont(None, 28)  # Font for buttons
     small_font = pygame.font.SysFont(None, 16)  # Small font for grid numbers
     story_font = pygame.font.SysFont(None, 22)  # Font for story text
-<<<<<<< HEAD
-    # Initial window size (for story screen)
-    INITIAL_WIDTH = STORY_WIDTH
-    INITIAL_HEIGHT = STORY_HEIGHT
-    window = pygame.display.set_mode((INITIAL_WIDTH, INITIAL_HEIGHT))
-    pygame.display.set_caption("Bomb Hunt Game")
-=======
     # Initial window size (for story screen) - make it resizable
     INITIAL_WIDTH = STORY_WIDTH
     INITIAL_HEIGHT = STORY_HEIGHT
@@ -434,9 +495,9 @@ def run_game():
     # Track current window dimensions
     current_width = INITIAL_WIDTH
     current_height = INITIAL_HEIGHT
->>>>>>> 8329a42 (add llm for story generation and narration)
-    # Initialize story generator
+    # Initialize story generator and opponent AI
     story_gen = StoryGenerator()
+    opponent_ai = OpponentAI()
     # Game state variables
     game_state = 'loading_story'
     difficulty = None
@@ -444,6 +505,7 @@ def run_game():
     GRID_WIDTH = 0
     GRID_HEIGHT = 0
     ai_turn_pending = False  # Flag for AI turn delay
+    ai_personality = None  # 'honest' or 'deceptive'
     # Story variables
     opening_story = None
     ending_story = None
@@ -457,6 +519,11 @@ def run_game():
     ai_next_target = None  # Grid number AI will target next (from player hint)
     input_text = ""  # Text input for player hint
     input_active = False  # Whether text input is active
+    # Chat interface variables
+    chat_input = ""  # Current chat message being typed
+    chat_input_active = False  # Whether chat input is focused
+    chat_scroll_offset = 0  # Scroll position for chat history
+    ai_response_loading = False  # Flag for when AI is generating response
     clock = pygame.time.Clock()
     running = True
 
@@ -484,7 +551,7 @@ def run_game():
                 current_width = event.w
                 current_height = event.h
                 window = pygame.display.set_mode((current_width, current_height), pygame.RESIZABLE)
-            # Handle keyboard input for dialog text entry
+            # Handle keyboard input for dialog text entry and chat
             if event.type == pygame.KEYDOWN:
                 if input_active:
                     if event.key == pygame.K_RETURN:
@@ -495,6 +562,7 @@ def run_game():
                             if 1 <= grid_num <= max_grid:
                                 player_hint_grid = grid_num
                                 ai_next_target = grid_num  # AI will target this next
+                                opponent_ai.record_player_hint(grid_num)  # Record in AI memory
                                 input_text = ""
                                 input_active = False
                                 dialog_completed = True
@@ -508,23 +576,33 @@ def run_game():
                         # Only allow digits
                         if event.unicode.isdigit():
                             input_text += event.unicode
+                elif chat_input_active and game_state in ['bomb_placement', 'player_turn', 'dialog']:
+                    if event.key == pygame.K_RETURN and chat_input.strip():
+                        # Submit chat message to opponent AI
+                        user_message = chat_input.strip()
+                        chat_input = ""
+                        # Generate AI response in background thread
+                        def get_ai_response():
+                            nonlocal ai_response_loading
+                            ai_response_loading = True
+                            opponent_ai.generate_response(user_message)
+                            ai_response_loading = False
+                        threading.Thread(target=get_ai_response, daemon=True).start()
+                    elif event.key == pygame.K_BACKSPACE:
+                        chat_input = chat_input[:-1]
+                    elif len(chat_input) < 100:
+                        chat_input += event.unicode
             # Handle mouse clicks
             if event.type == pygame.MOUSEBUTTONDOWN:
                 x, y = pygame.mouse.get_pos()
                 # Story opening screen - begin mission button
                 if game_state == 'story_opening':
                     if opening_story:
-<<<<<<< HEAD
-                        begin_rect = (STORY_WIDTH // 2 - 100, STORY_HEIGHT - 80, 200, 50)
-                        if check_button_click(x, y, begin_rect):
-                            window = pygame.display.set_mode((400, 300))
-=======
                         begin_rect = (current_width // 2 - 100, current_height - 80, 200, 50)
                         if check_button_click(x, y, begin_rect):
                             window = pygame.display.set_mode((400, 300), pygame.RESIZABLE)
                             current_width = 400
                             current_height = 300
->>>>>>> 8329a42 (add llm for story generation and narration)
                             game_state = 'difficulty_selection'
                 # Difficulty selection screen
                 elif game_state == 'difficulty_selection':
@@ -534,12 +612,17 @@ def run_game():
                     if check_button_click(x, y, easy_rect):
                         difficulty = 'easy'
                         GRID_WIDTH = GRID_HEIGHT = get_difficulty_size(difficulty)
-                        WINDOW_WIDTH = GRID_WIDTH * CELL_SIZE + RIGHT_PANEL_WIDTH
+                        WINDOW_WIDTH = GRID_WIDTH * CELL_SIZE + RIGHT_PANEL_WIDTH + CHAT_PANEL_WIDTH
                         WINDOW_HEIGHT = GRID_HEIGHT * CELL_SIZE
                         window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
                         current_width = WINDOW_WIDTH
                         current_height = WINDOW_HEIGHT
                         grid = Grid(GRID_WIDTH, GRID_HEIGHT, CELL_SIZE)
+                        # Initialize opponent AI with random personality
+                        ai_personality = random.choice(['honest', 'deceptive'])
+                        opponent_ai.initialize(
+                            opening_story, mission_data, ai_personality, GRID_WIDTH * GRID_HEIGHT
+                        )
                         game_state = 'bomb_placement'
                         dialog_completed = False
                         ai_hint_grid = None
@@ -547,15 +630,22 @@ def run_game():
                         ai_next_target = None
                         input_text = ""
                         input_active = False
+                        chat_input = ""
+                        chat_input_active = False
                     elif check_button_click(x, y, medium_rect):
                         difficulty = 'medium'
                         GRID_WIDTH = GRID_HEIGHT = get_difficulty_size(difficulty)
-                        WINDOW_WIDTH = GRID_WIDTH * CELL_SIZE + RIGHT_PANEL_WIDTH
+                        WINDOW_WIDTH = GRID_WIDTH * CELL_SIZE + RIGHT_PANEL_WIDTH + CHAT_PANEL_WIDTH
                         WINDOW_HEIGHT = GRID_HEIGHT * CELL_SIZE
                         window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
                         current_width = WINDOW_WIDTH
                         current_height = WINDOW_HEIGHT
                         grid = Grid(GRID_WIDTH, GRID_HEIGHT, CELL_SIZE)
+                        # Initialize opponent AI with random personality
+                        ai_personality = random.choice(['honest', 'deceptive'])
+                        opponent_ai.initialize(
+                            opening_story, mission_data, ai_personality, GRID_WIDTH * GRID_HEIGHT
+                        )
                         game_state = 'bomb_placement'
                         dialog_completed = False
                         ai_hint_grid = None
@@ -563,15 +653,22 @@ def run_game():
                         ai_next_target = None
                         input_text = ""
                         input_active = False
+                        chat_input = ""
+                        chat_input_active = False
                     elif check_button_click(x, y, hard_rect):
                         difficulty = 'hard'
                         GRID_WIDTH = GRID_HEIGHT = get_difficulty_size(difficulty)
-                        WINDOW_WIDTH = GRID_WIDTH * CELL_SIZE + RIGHT_PANEL_WIDTH
+                        WINDOW_WIDTH = GRID_WIDTH * CELL_SIZE + RIGHT_PANEL_WIDTH + CHAT_PANEL_WIDTH
                         WINDOW_HEIGHT = GRID_HEIGHT * CELL_SIZE
                         window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
                         current_width = WINDOW_WIDTH
                         current_height = WINDOW_HEIGHT
                         grid = Grid(GRID_WIDTH, GRID_HEIGHT, CELL_SIZE)
+                        # Initialize opponent AI with random personality
+                        ai_personality = random.choice(['honest', 'deceptive'])
+                        opponent_ai.initialize(
+                            opening_story, mission_data, ai_personality, GRID_WIDTH * GRID_HEIGHT
+                        )
                         game_state = 'bomb_placement'
                         dialog_completed = False
                         ai_hint_grid = None
@@ -579,16 +676,13 @@ def run_game():
                         ai_next_target = None
                         input_text = ""
                         input_active = False
+                        chat_input = ""
+                        chat_input_active = False
                 # Story ending screen - restart or quit
                 elif game_state == 'story_ending':
                     if ending_story:
-<<<<<<< HEAD
-                        new_mission_rect = (STORY_WIDTH // 2 - 210, STORY_HEIGHT - 80, 180, 50)
-                        quit_rect = (STORY_WIDTH // 2 + 30, STORY_HEIGHT - 80, 180, 50)
-=======
                         new_mission_rect = (current_width // 2 - 210, current_height - 80, 180, 50)
                         quit_rect = (current_width // 2 + 30, current_height - 80, 180, 50)
->>>>>>> 8329a42 (add llm for story generation and narration)
                         if check_button_click(x, y, new_mission_rect):
                             # Start a new game
                             grid.reset()
@@ -598,13 +692,9 @@ def run_game():
                             ending_story = None
                             mission_data = None
                             story_error = None
-<<<<<<< HEAD
-                            window = pygame.display.set_mode((STORY_WIDTH, STORY_HEIGHT))
-=======
                             window = pygame.display.set_mode((STORY_WIDTH, STORY_HEIGHT), pygame.RESIZABLE)
                             current_width = STORY_WIDTH
                             current_height = STORY_HEIGHT
->>>>>>> 8329a42 (add llm for story generation and narration)
                             ai_turn_pending = False
                             dialog_completed = False
                             ai_hint_grid = None
@@ -618,57 +708,92 @@ def run_game():
                             running = False
                 # Dialog screen - ask AI for help
                 elif game_state == 'dialog':
-                    # Calculate dynamic position for Ask AI button
+                    # Calculate dynamic position for Ask AI button (match layout calculation)
                     grid_pixel_width = GRID_WIDTH * CELL_SIZE
                     grid_pixel_height = GRID_HEIGHT * CELL_SIZE
-                    total_content_width = grid_pixel_width + RIGHT_PANEL_WIDTH
+                    total_content_width = grid_pixel_width + RIGHT_PANEL_WIDTH + CHAT_PANEL_WIDTH
                     temp_grid_x_offset = max(0, (current_width - total_content_width) // 2)
                     temp_grid_y_offset = max(0, (current_height - grid_pixel_height) // 2)
                     panel_x = temp_grid_x_offset + grid_pixel_width
                     ask_button = (panel_x + 10, temp_grid_y_offset + 100, 180, 40)
                     if check_button_click(x, y, ask_button):
-                        ai_honest = ai_honesty_check()
                         ai_bomb_loc = grid.get_ai_bomb_location()
-                        if ai_honest:
+                        # Use opponent AI's personality to determine honesty
+                        if opponent_ai.personality == 'honest':
                             ai_hint_grid = ai_bomb_loc
                         else:
                             wrong_options = [i for i in range(1, GRID_WIDTH * GRID_HEIGHT + 1)
                                            if i != ai_bomb_loc]
                             ai_hint_grid = random.choice(wrong_options)
                         input_active = True  # Enable text input for player response
-                # Grid clicks during gameplay (check if click is within grid bounds)
+                # Grid clicks and chat input clicks during gameplay
                 elif grid:
                     grid_pixel_width = GRID_WIDTH * CELL_SIZE
                     grid_pixel_height = GRID_HEIGHT * CELL_SIZE
-                    total_content_width = grid_pixel_width + RIGHT_PANEL_WIDTH
+                    total_content_width = grid_pixel_width + RIGHT_PANEL_WIDTH + CHAT_PANEL_WIDTH
                     temp_grid_x_offset = max(0, (current_width - total_content_width) // 2)
                     temp_grid_y_offset = max(0, (current_height - grid_pixel_height) // 2)
+                    
+                    # Calculate chat input box position
+                    temp_panel_x = temp_grid_x_offset + grid_pixel_width
+                    if current_width >= total_content_width:
+                        temp_panel_width = RIGHT_PANEL_WIDTH
+                        temp_chat_width = CHAT_PANEL_WIDTH
+                    else:
+                        remaining_width = current_width - grid_pixel_width
+                        temp_panel_width = max(100, remaining_width // 2)
+                        temp_chat_width = max(200, remaining_width - temp_panel_width - 10)
+                    temp_chat_x = temp_panel_x + temp_panel_width + 5
+                    chat_input_y = temp_grid_y_offset + grid_pixel_height - 45
+                    chat_input_rect = (temp_chat_x + 5, chat_input_y, temp_chat_width - 10, 35)
+                    
+                    # Check if click is in chat input
+                    if check_button_click(x, y, chat_input_rect):
+                        chat_input_active = True
+                        input_active = False  # Deactivate dialog input if active
                     # Check if click is within grid area
-                    if (temp_grid_x_offset <= x <= temp_grid_x_offset + grid_pixel_width and
+                    elif (temp_grid_x_offset <= x <= temp_grid_x_offset + grid_pixel_width and
                         temp_grid_y_offset <= y <= temp_grid_y_offset + grid_pixel_height):
+                        chat_input_active = False  # Deactivate chat when clicking grid
                         if game_state == 'bomb_placement':
                             if grid.handle_click(x, y, game_state, temp_grid_x_offset, temp_grid_y_offset):
                                 grid.place_ai_bomb()
+                                # Record AI's bomb location in opponent AI
+                                ai_bomb_loc = grid.get_ai_bomb_location()
+                                opponent_ai.set_item_location(ai_bomb_loc)
                                 game_state = 'dialog'
                                 dialog_completed = False
                         elif game_state == 'player_turn' and grid.player_turn:
-                            if grid.handle_click(x, y, game_state, temp_grid_x_offset, temp_grid_y_offset):
+                            revealed_grid = grid.handle_click(x, y, game_state, temp_grid_x_offset, temp_grid_y_offset)
+                            if revealed_grid:
+                                opponent_ai.update_revealed_grid(revealed_grid, 'player')
                                 ai_turn_pending = True  # Trigger AI turn after delay
+                    else:
+                        # Click outside grid and chat deactivates chat input
+                        if not check_button_click(x, y, chat_input_rect):
+                            chat_input_active = False
         # AI turn processing (with delay for better UX)
         if grid and ai_turn_pending and game_state == 'player_turn' and not grid.player_turn:
             pygame.time.wait(500)  # Brief delay before AI move
-            grid.ai_reveal(ai_next_target)  # AI reveals (uses hint if available)
+            # Get unrevealed grids and let AI decide
+            unrevealed = grid.get_unrevealed_cells()
+            unrevealed_nums = [grid.get_grid_number(col, row) for col, row in unrevealed]
+            if ai_next_target and ai_next_target in unrevealed_nums:
+                # Use hint if available
+                target_grid = ai_next_target
+            else:
+                # Let opponent AI decide strategically
+                target_grid = opponent_ai.decide_next_move(unrevealed_nums)
+            col, row = grid.get_coords_from_number(target_grid)
+            grid.reveal_cell(col, row, 'ai')
+            opponent_ai.update_revealed_grid(target_grid, 'ai')
             ai_next_target = None  # Clear hint after use
             if grid.victor:
                 # Game ended - generate ending story
                 game_state = 'loading_ending'
-<<<<<<< HEAD
-                window = pygame.display.set_mode((STORY_WIDTH, STORY_HEIGHT))
-=======
                 window = pygame.display.set_mode((STORY_WIDTH, STORY_HEIGHT), pygame.RESIZABLE)
                 current_width = STORY_WIDTH
                 current_height = STORY_HEIGHT
->>>>>>> 8329a42 (add llm for story generation and narration)
 
                 def load_ending_story():
                     nonlocal ending_story, story_loading, story_error, game_state
@@ -690,15 +815,6 @@ def run_game():
             ai_turn_pending = False
         # Rendering
         window.fill(WHITE)
-<<<<<<< HEAD
-        # Render current game state
-        if game_state == 'loading_story':
-            # Show loading screen while generating opening story
-            loading_text = prompt_font.render("Generating Mission...", True, BLACK)
-            window.blit(loading_text, (STORY_WIDTH // 2 - 150, STORY_HEIGHT // 2 - 20))
-            spinner_text = story_font.render("Please wait...", True, BLACK)
-            window.blit(spinner_text, (STORY_WIDTH // 2 - 70, STORY_HEIGHT // 2 + 20))
-=======
         # Render current game state (use current_width and current_height for dynamic sizing)
         if game_state == 'loading_story':
             # Show loading screen while generating opening story
@@ -706,7 +822,6 @@ def run_game():
             window.blit(loading_text, (current_width // 2 - 150, current_height // 2 - 20))
             spinner_text = story_font.render("Please wait...", True, BLACK)
             window.blit(spinner_text, (current_width // 2 - 70, current_height // 2 + 20))
->>>>>>> 8329a42 (add llm for story generation and narration)
         elif game_state == 'story_opening':
             # Display opening story
             if story_error:
@@ -716,41 +831,25 @@ def run_game():
                 window.blit(error_msg, (50, 100))
             elif opening_story:
                 title_text = prompt_font.render("MISSION BRIEFING", True, BLACK)
-<<<<<<< HEAD
-                window.blit(title_text, (STORY_WIDTH // 2 - 120, 30))
-                # Wrap and display story text
-                wrapped_lines = wrap_text(opening_story, story_font, STORY_WIDTH - 100)
-=======
                 window.blit(title_text, (current_width // 2 - 120, 30))
                 # Wrap and display story text dynamically based on window width
                 wrapped_lines = wrap_text(opening_story, story_font, current_width - 100)
->>>>>>> 8329a42 (add llm for story generation and narration)
                 y_offset = 100
                 for line in wrapped_lines:
                     line_surface = story_font.render(line, True, BLACK)
                     window.blit(line_surface, (50, y_offset))
                     y_offset += 30
                 # Begin mission button
-<<<<<<< HEAD
-                begin_rect = (STORY_WIDTH // 2 - 100, STORY_HEIGHT - 80, 200, 50)
-=======
                 begin_rect = (current_width // 2 - 100, current_height - 80, 200, 50)
->>>>>>> 8329a42 (add llm for story generation and narration)
                 pygame.draw.rect(window, (100, 200, 100), begin_rect)
                 begin_text = button_font.render("BEGIN MISSION", True, WHITE)
                 window.blit(begin_text, (begin_rect[0] + 30, begin_rect[1] + 12))
         elif game_state == 'loading_ending':
             # Show loading screen while generating ending story
             loading_text = prompt_font.render("Processing Outcome...", True, BLACK)
-<<<<<<< HEAD
-            window.blit(loading_text, (STORY_WIDTH // 2 - 160, STORY_HEIGHT // 2 - 20))
-            spinner_text = story_font.render("Please wait...", True, BLACK)
-            window.blit(spinner_text, (STORY_WIDTH // 2 - 70, STORY_HEIGHT // 2 + 20))
-=======
             window.blit(loading_text, (current_width // 2 - 160, current_height // 2 - 20))
             spinner_text = story_font.render("Please wait...", True, BLACK)
             window.blit(spinner_text, (current_width // 2 - 70, current_height // 2 + 20))
->>>>>>> 8329a42 (add llm for story generation and narration)
         elif game_state == 'story_ending':
             # Display ending story
             if story_error:
@@ -762,28 +861,17 @@ def run_game():
                 result = "MISSION SUCCESS" if grid.victor == 'Player' else "MISSION FAILED"
                 color = (50, 150, 50) if grid.victor == 'Player' else (150, 50, 50)
                 title_text = prompt_font.render(result, True, color)
-<<<<<<< HEAD
-                window.blit(title_text, (STORY_WIDTH // 2 - 120, 30))
-                # Wrap and display story text
-                wrapped_lines = wrap_text(ending_story, story_font, STORY_WIDTH - 100)
-=======
                 window.blit(title_text, (current_width // 2 - 120, 30))
                 # Wrap and display story text dynamically based on window width
                 wrapped_lines = wrap_text(ending_story, story_font, current_width - 100)
->>>>>>> 8329a42 (add llm for story generation and narration)
                 y_offset = 100
                 for line in wrapped_lines:
                     line_surface = story_font.render(line, True, BLACK)
                     window.blit(line_surface, (50, y_offset))
                     y_offset += 30
                 # New Mission and Quit buttons
-<<<<<<< HEAD
-                new_mission_rect = (STORY_WIDTH // 2 - 210, STORY_HEIGHT - 80, 180, 50)
-                quit_rect = (STORY_WIDTH // 2 + 30, STORY_HEIGHT - 80, 180, 50)
-=======
                 new_mission_rect = (current_width // 2 - 210, current_height - 80, 180, 50)
                 quit_rect = (current_width // 2 + 30, current_height - 80, 180, 50)
->>>>>>> 8329a42 (add llm for story generation and narration)
                 pygame.draw.rect(window, (100, 200, 100), new_mission_rect)  # Green
                 pygame.draw.rect(window, (200, 100, 100), quit_rect)  # Red
                 new_mission_text = button_font.render("NEW MISSION", True, WHITE)
@@ -807,27 +895,27 @@ def run_game():
             window.blit(medium_text, (medium_rect[0] + 70, medium_rect[1] + 10))
             window.blit(hard_text, (hard_rect[0] + 80, hard_rect[1] + 10))
         elif grid:
-            # Calculate offsets to center game content
+            # Calculate offsets to center game content (grid + info panel, chat panel on right)
             grid_pixel_width = GRID_WIDTH * CELL_SIZE
             grid_pixel_height = GRID_HEIGHT * CELL_SIZE
-            total_content_width = grid_pixel_width + RIGHT_PANEL_WIDTH
-            # If window is larger, use extra space; otherwise center content
+            total_content_width = grid_pixel_width + RIGHT_PANEL_WIDTH + CHAT_PANEL_WIDTH
+            # If window is larger, use extra space; otherwise no centering
             if current_width >= total_content_width:
                 grid_x_offset = max(0, (current_width - total_content_width) // 2)
                 panel_width = RIGHT_PANEL_WIDTH
+                chat_width = CHAT_PANEL_WIDTH
             else:
                 # Window too small, no centering
                 grid_x_offset = 0
-                panel_width = max(100, current_width - grid_pixel_width)
+                remaining_width = current_width - grid_pixel_width
+                panel_width = max(100, remaining_width // 2)
+                chat_width = max(200, remaining_width - panel_width - 10)
             grid_y_offset = max(0, (current_height - grid_pixel_height) // 2)
-            # Draw grid with offset for centering
+            # Draw grid with offset
             grid.draw(window, font, small_font, grid_x_offset, grid_y_offset)
-            # Calculate panel position
+            # Calculate panel position (info panel left of chat)
             panel_x = grid_x_offset + grid_pixel_width
-            # If window is extra wide, expand panel width
-            available_space = current_width - panel_x
-            panel_width = max(panel_width, min(available_space - 20, 500))
-            # Draw side panel background
+            # Draw info panel background
             if panel_width > 0:
                 pygame.draw.rect(window, PANEL_COLOR,
                                  (panel_x, grid_y_offset, panel_width,
@@ -839,15 +927,6 @@ def run_game():
             if game_state == 'bomb_placement':
                 # Use mission-specific terminology from the story
                 player_item = mission_data['player_item'] if mission_data else "bomb"
-<<<<<<< HEAD
-                prompt_text = prompt_font.render(f"Hide your {player_item}", True, BLACK)
-                window.blit(prompt_text, (GRID_WIDTH * CELL_SIZE + 10, prompt_y))
-            elif game_state == 'dialog':
-                # Dialog phase UI - use mission-specific terminology
-                ai_item = mission_data['ai_item'] if mission_data else "target"
-                prompt_text = prompt_font.render(f"Locate {ai_item}", True, BLACK)
-                window.blit(prompt_text, (GRID_WIDTH * CELL_SIZE + 10, prompt_y))
-=======
                 text_content = f"Hide your {player_item}"
                 # Wrap text if needed
                 wrapped = wrap_text(text_content, prompt_font, available_panel_width)
@@ -865,21 +944,10 @@ def run_game():
                     window.blit(line_surf, (panel_x + 10, y_pos))
                     y_pos += 35
                 
->>>>>>> 8329a42 (add llm for story generation and narration)
                 if ai_hint_grid:
                     # Show AI's response with mission-specific terminology
                     ai_item = mission_data['ai_item'] if mission_data else "target"
                     hint_text = f"AI says: {ai_item.capitalize()} at grid {ai_hint_grid}"
-<<<<<<< HEAD
-                    hint_surface = button_font.render(hint_text, True, BLACK)
-                    window.blit(hint_surface, (GRID_WIDTH * CELL_SIZE + 10, 60))
-                    # Show AI's question to player with mission-specific terminology
-                    player_item = mission_data['player_item'] if mission_data else "position"
-                    ai_question = button_font.render(f"AI asks: Where is your", True, BLACK)
-                    window.blit(ai_question, (GRID_WIDTH * CELL_SIZE + 10, 100))
-                    ai_question2 = button_font.render(f"{player_item}?", True, BLACK)
-                    window.blit(ai_question2, (GRID_WIDTH * CELL_SIZE + 10, 120))
-=======
                     hint_wrapped = wrap_text(hint_text, button_font, available_panel_width)
                     y_pos = grid_y_offset + 70
                     for line in hint_wrapped:
@@ -897,7 +965,6 @@ def run_game():
                         window.blit(line_surf, (panel_x + 10, y_pos))
                         y_pos += 25
                     
->>>>>>> 8329a42 (add llm for story generation and narration)
                     # Show input field if dialog not completed
                     if not dialog_completed:
                         y_pos += 10
@@ -916,15 +983,6 @@ def run_game():
                 # Show whose turn it is with mission-specific terminology
                 if grid.player_turn:
                     ai_item = mission_data['ai_item'] if mission_data else "target"
-<<<<<<< HEAD
-                    prompt_text = prompt_font.render(f"Find {ai_item}", True, BLACK)
-                    window.blit(prompt_text, (GRID_WIDTH * CELL_SIZE + 10,
-                                              prompt_y))
-                else:
-                    prompt_text = prompt_font.render("AI's turn...", True, BLACK)
-                    window.blit(prompt_text, (GRID_WIDTH * CELL_SIZE + 10,
-                                              prompt_y))
-=======
                     text_content = f"Find {ai_item}"
                 else:
                     text_content = "AI's turn..."
@@ -932,7 +990,15 @@ def run_game():
                 for i, line in enumerate(wrapped):
                     line_surf = prompt_font.render(line, True, BLACK)
                     window.blit(line_surf, (panel_x + 10, prompt_y + i * 35))
->>>>>>> 8329a42 (add llm for story generation and narration)
+            
+            # Draw chat sidebar on the right (available in all gameplay states)
+            chat_x = panel_x + panel_width + 5
+            if chat_width > 0 and opponent_ai.story_context:
+                draw_chat_sidebar(
+                    window, chat_x, grid_y_offset, chat_width, grid_pixel_height,
+                    opponent_ai, chat_input, chat_input_active, ai_response_loading,
+                    button_font, small_font
+                )
         # Update display and maintain 60 FPS
         pygame.display.flip()
         clock.tick(60)

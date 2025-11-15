@@ -34,6 +34,7 @@ from opponent_ai import OpponentAI
 # Color constants for game visuals
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
+RED = (220, 0, 0)  # Red for timer warning
 PLAYER_COLOR = (180, 220, 255)  # Light blue for player reveals
 AI_COLOR = (255, 180, 180)  # Light red for AI reveals
 WIN_COLOR = (180, 255, 180)  # Green for winning reveal (bomb found)
@@ -373,6 +374,44 @@ def get_difficulty_size(difficulty):
     return base_size
 
 
+def get_difficulty_timer(difficulty):
+    """
+    Get timer duration based on difficulty level.
+
+    Args:
+        difficulty: 'easy', 'medium', or 'hard'
+
+    Returns:
+        Time duration in seconds
+    """
+    if difficulty == 'easy':
+        return 30  # 30 seconds
+    elif difficulty == 'medium':
+        return 40  # 40 seconds
+    elif difficulty == 'hard':
+        return 50  # 50 seconds
+    return 30  # Default to easy
+
+
+def get_difficulty_attempts(difficulty):
+    """
+    Get number of allowed attempts based on difficulty level.
+
+    Args:
+        difficulty: 'easy', 'medium', or 'hard'
+
+    Returns:
+        Number of attempts allowed
+    """
+    if difficulty == 'easy':
+        return 5  # 5 attempts
+    elif difficulty == 'medium':
+        return 4  # 4 attempts
+    elif difficulty == 'hard':
+        return 3  # 3 attempts
+    return 5  # Default to easy
+
+
 def ai_honesty_check():
     """
     DEPRECATED: Previously used to determine AI honesty.
@@ -552,7 +591,7 @@ def run_game():
     # Game constants
     CELL_SIZE = 40  # Pixel size of each grid cell
     CHAT_PANEL_WIDTH = 400  # Width of chat sidebar on the right
-    GRID_TOP_MARGIN = 60  # Space above grid for prompts
+    GRID_TOP_MARGIN = 100  # Space above grid for timer and prompts
     STORY_WIDTH = 600  # Width for story display
     STORY_HEIGHT = 500  # Height for story display
     # Font setup
@@ -580,6 +619,12 @@ def run_game():
     GRID_HEIGHT = 0
     ai_turn_pending = False  # Flag for AI turn delay
     ai_personality = None  # 'honest', 'deceptive', or '50-50'
+    # Timer variables
+    timer_start = None  # Time when gameplay started
+    timer_duration = 0  # Total time allowed (seconds) - set based on difficulty
+    # Attempts variables
+    max_attempts = 0  # Maximum attempts allowed - set based on difficulty
+    attempts_used = 0  # Number of attempts player has used
     # Story variables
     opening_story = None
     ending_story = None
@@ -666,6 +711,9 @@ def run_game():
                     if check_button_click(x, y, easy_rect):
                         difficulty = 'easy'
                         GRID_WIDTH = GRID_HEIGHT = get_difficulty_size(difficulty)
+                        timer_duration = get_difficulty_timer(difficulty)
+                        max_attempts = get_difficulty_attempts(difficulty)
+                        attempts_used = 0
                         WINDOW_WIDTH = GRID_WIDTH * CELL_SIZE + CHAT_PANEL_WIDTH + 20
                         WINDOW_HEIGHT = GRID_HEIGHT * CELL_SIZE + GRID_TOP_MARGIN + 20
                         window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
@@ -683,6 +731,9 @@ def run_game():
                     elif check_button_click(x, y, medium_rect):
                         difficulty = 'medium'
                         GRID_WIDTH = GRID_HEIGHT = get_difficulty_size(difficulty)
+                        timer_duration = get_difficulty_timer(difficulty)
+                        max_attempts = get_difficulty_attempts(difficulty)
+                        attempts_used = 0
                         WINDOW_WIDTH = GRID_WIDTH * CELL_SIZE + CHAT_PANEL_WIDTH + 20
                         WINDOW_HEIGHT = GRID_HEIGHT * CELL_SIZE + GRID_TOP_MARGIN + 20
                         window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
@@ -700,6 +751,9 @@ def run_game():
                     elif check_button_click(x, y, hard_rect):
                         difficulty = 'hard'
                         GRID_WIDTH = GRID_HEIGHT = get_difficulty_size(difficulty)
+                        timer_duration = get_difficulty_timer(difficulty)
+                        max_attempts = get_difficulty_attempts(difficulty)
+                        attempts_used = 0
                         WINDOW_WIDTH = GRID_WIDTH * CELL_SIZE + CHAT_PANEL_WIDTH + 20
                         WINDOW_HEIGHT = GRID_HEIGHT * CELL_SIZE + GRID_TOP_MARGIN + 20
                         window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
@@ -725,6 +779,8 @@ def run_game():
                             game_state = 'loading_story'
                             grid = None
                             opening_story = None
+                            timer_start = None  # Reset timer
+                            attempts_used = 0  # Reset attempts
                             ending_story = None
                             mission_data = None
                             story_error = None
@@ -766,9 +822,11 @@ def run_game():
                                 ai_bomb_loc = grid.get_ai_bomb_location()
                                 opponent_ai.set_item_location(ai_bomb_loc)
                                 game_state = 'player_turn'  # Go straight to gameplay
+                                timer_start = pygame.time.get_ticks() / 1000  # Start timer (in seconds)
                         elif game_state == 'player_turn' and grid.player_turn:
                             revealed_grid = grid.handle_click(x, y, game_state, temp_grid_x_offset, temp_grid_y_offset)
                             if revealed_grid:
+                                attempts_used += 1  # Increment attempts counter
                                 opponent_ai.update_revealed_grid(revealed_grid, 'player')
                                 # Check if player won before triggering AI turn
                                 if grid.victor:
@@ -793,6 +851,29 @@ def run_game():
                                             game_state = 'story_ending'
 
                                     threading.Thread(target=load_ending_story, daemon=True).start()
+                                elif attempts_used >= max_attempts:
+                                    # Out of attempts! Player loses
+                                    grid.victor = 'AI'
+                                    game_state = 'loading_ending'
+                                    window = pygame.display.set_mode((STORY_WIDTH, STORY_HEIGHT), pygame.RESIZABLE)
+                                    current_width = STORY_WIDTH
+                                    current_height = STORY_HEIGHT
+
+                                    def load_ending_story():
+                                        nonlocal ending_story, story_loading, story_error, game_state
+                                        story_loading = True
+                                        try:
+                                            ending_story = story_gen.generate_ending_story(
+                                                opening_story, False
+                                            )
+                                            story_loading = False
+                                            game_state = 'story_ending'
+                                        except Exception as e:
+                                            story_error = f"Error generating ending: {str(e)}"
+                                            story_loading = False
+                                            game_state = 'story_ending'
+
+                                    threading.Thread(target=load_ending_story, daemon=True).start()
                                 else:
                                     # Game continues - trigger AI turn
                                     ai_turn_pending = True
@@ -800,6 +881,33 @@ def run_game():
                         # Click outside grid and chat deactivates chat input
                         if not (temp_chat_width > 0 and check_button_click(x, y, chat_input_rect)):
                             chat_input_active = False
+        
+        # Timer check - if time runs out, player loses
+        if game_state == 'player_turn' and timer_start is not None:
+            current_time = pygame.time.get_ticks() / 1000
+            elapsed_time = current_time - timer_start
+            if elapsed_time >= timer_duration:
+                # Time's up! Player loses
+                grid.victor = 'AI'
+                game_state = 'loading_ending'
+                window = pygame.display.set_mode((STORY_WIDTH, STORY_HEIGHT), pygame.RESIZABLE)
+                current_width = STORY_WIDTH
+                current_height = STORY_HEIGHT
+                
+                def load_ending_story():
+                    nonlocal ending_story, story_loading, story_error, game_state
+                    story_loading = True
+                    try:
+                        ending_story = story_gen.generate_ending_story(opening_story, False)
+                        story_loading = False
+                        game_state = 'story_ending'
+                    except Exception as e:
+                        story_error = f"Error generating ending: {str(e)}"
+                        story_loading = False
+                        game_state = 'story_ending'
+                
+                threading.Thread(target=load_ending_story, daemon=True).start()
+        
         # AI turn processing (with delay for better UX)
         if grid and ai_turn_pending and game_state == 'player_turn' and not grid.player_turn:
             pygame.time.wait(500)  # Brief delay before AI move
@@ -945,9 +1053,33 @@ def run_game():
                 else:
                     prompt_text = "AI's turn..."
             
+            # Display timer and attempts above prompt (during player_turn only)
+            if game_state == 'player_turn' and timer_start is not None:
+                current_time = pygame.time.get_ticks() / 1000
+                elapsed_time = current_time - timer_start
+                remaining_time = max(0, timer_duration - elapsed_time)
+                remaining_attempts = max_attempts - attempts_used
+                
+                # Timer text
+                timer_text = f"Time: {int(remaining_time)}s"
+                timer_color = RED if remaining_time < 10 else BLACK
+                timer_surf = prompt_font.render(timer_text, True, timer_color)
+                
+                # Attempts text (more intuitive format)
+                attempts_text = f"Attempts left: {remaining_attempts}"
+                attempts_color = RED if remaining_attempts <= 1 else BLACK
+                attempts_surf = prompt_font.render(attempts_text, True, attempts_color)
+                
+                # Position them side by side, centered above grid
+                total_width = timer_surf.get_width() + 50 + attempts_surf.get_width()
+                start_x = max(10, grid_x_offset + (grid_pixel_width - total_width) // 2)
+                
+                window.blit(timer_surf, (start_x, grid_y_offset - 80))
+                window.blit(attempts_surf, (start_x + timer_surf.get_width() + 50, grid_y_offset - 80))
+            
             prompt_surf = prompt_font.render(prompt_text, True, BLACK)
             prompt_x = grid_x_offset + (grid_pixel_width - prompt_surf.get_width()) // 2
-            window.blit(prompt_surf, (prompt_x, grid_y_offset - 40))
+            window.blit(prompt_surf, (prompt_x, grid_y_offset - 45))
             
             # Draw grid
             grid.draw(window, font, small_font, grid_x_offset, grid_y_offset)

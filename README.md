@@ -11,5 +11,11 @@ Yet, remember. You shape the path to victory. Do you choose Dialog, or Combat?
 
 1. THE DUEL OF MINDS
    What it is? Dialogue under intense time pressure.
-   
+   What is your objective? Defeat the AI in the mental game of two lie masters, accounting for the AI's constant evolution. The more you lie and the more you believe, the           clearer your psychological profile becomes, providing the AI with the information on how to manipulate you into loss.
+
+2. THE DUEL OF BODIES
+   What it is? Grid-based tactical combat, building and evolving your Human Cell with every strategic step. Every level, the AI triggers its Cellular Mutation, weakening a          specific, crucial part of your developing Human Cell profile.
+   What is your objective? ...
+
+
    

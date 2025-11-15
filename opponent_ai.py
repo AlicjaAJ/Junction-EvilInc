@@ -167,12 +167,18 @@ Respond naturally as if you're a sentient opponent in this scenario."""
         
         Args:
             unrevealed_grids: List of grid numbers that haven't been revealed
+                              (should already exclude AI's own item location)
             
         Returns:
             Grid number to reveal
         """
+        # SAFEGUARD: Ensure AI's own location is never in the target list
+        valid_targets = [g for g in unrevealed_grids if g != self.my_item_location]
+        if not valid_targets:
+            return None  # No valid targets left
+        
         # If AI has a hunch about player's location, target that area
-        if self.player_item_location and self.player_item_location in unrevealed_grids:
+        if self.player_item_location and self.player_item_location in valid_targets:
             return self.player_item_location
         
         # Otherwise, use LLM to make a strategic decision
@@ -180,8 +186,8 @@ Respond naturally as if you're a sentient opponent in this scenario."""
             system_prompt = self._build_system_prompt()
             prompt = (
                 f"You need to choose which grid to search next. "
-                f"Available grids: {unrevealed_grids[:10]}... "
-                f"(showing first 10 of {len(unrevealed_grids)} unrevealed grids)\n\n"
+                f"Available grids: {valid_targets[:10]}... "
+                f"(showing first 10 of {len(valid_targets)} unrevealed grids)\n\n"
                 f"Based on your strategy, which ONE grid number would you search? "
                 f"Respond with ONLY the grid number, nothing else."
             )
@@ -204,14 +210,14 @@ Respond naturally as if you're a sentient opponent in this scenario."""
             # Extract grid number from response
             grid_choice = int(''.join(filter(str.isdigit, choice_text)))
             
-            # Validate it's in unrevealed list
-            if grid_choice in unrevealed_grids:
+            # Validate it's in valid targets (excludes AI's own location)
+            if grid_choice in valid_targets:
                 return grid_choice
         except:
             pass
         
-        # Fallback to random choice
-        return random.choice(unrevealed_grids)
+        # Fallback to random choice (from valid targets only)
+        return random.choice(valid_targets) if valid_targets else None
     
     def get_chat_history(self):
         """

@@ -94,11 +94,16 @@ class Grid:
         """
         Place the AI's bomb at a random empty location.
 
-        The AI chooses randomly from all available (empty) cells.
+        This ensures AI and Player items are NEVER in the same location because:
+        1. Player places their item first
+        2. AI only chooses from cells where item_type is None/Empty
+        3. Player's cell is no longer empty, so it's excluded automatically
+        
+        This prevents same-location collision without the AI "knowing" where player is.
         """
         if self.ai_bomb_placed:
             return
-        # Find all empty cells
+        # Find all empty cells (excludes player's already-placed item)
         available = [(x, y) for x in range(self.width) for y in range(self.height)
                      if not self.cells[x][y].item_type]
         if available:
@@ -125,11 +130,29 @@ class Grid:
         # Don't reveal already revealed cells
         if cell.revealed:
             return False
+        
+        # CRITICAL: Prevent players from revealing their own item location
+        # This ensures both items stay "in play" until opponent finds them
+        if cell.item_type:
+            item_owner = cell.item_type[0]
+            if revealed_by == 'player' and item_owner == 'P':
+                # Player trying to reveal their own item - not allowed!
+                return False
+            elif revealed_by == 'ai' and item_owner == 'A':
+                # AI trying to reveal its own item - not allowed!
+                return False
+        
         cell.reveal(revealed_by)
-        # Check if a bomb was found (victory condition)
-        if cell.item_type and cell.item_type[0] in ['P', 'A']:
-            # If player reveals AI bomb, player wins (and vice versa)
-            self.victor = 'Player' if revealed_by == 'player' else 'AI'
+        # Check if opponent's bomb was found (victory condition)
+        # Player wins by finding AI's bomb ('A'), AI wins by finding Player's bomb ('P')
+        if cell.item_type:
+            item_owner = cell.item_type[0]  # 'P' for player's item, 'A' for AI's item
+            if revealed_by == 'player' and item_owner == 'A':
+                # Player found AI's item - Player wins!
+                self.victor = 'Player'
+            elif revealed_by == 'ai' and item_owner == 'P':
+                # AI found Player's item - AI wins!
+                self.victor = 'AI'
         return True
 
     def reset(self):
@@ -744,7 +767,32 @@ def run_game():
                             revealed_grid = grid.handle_click(x, y, game_state, temp_grid_x_offset, temp_grid_y_offset)
                             if revealed_grid:
                                 opponent_ai.update_revealed_grid(revealed_grid, 'player')
-                                ai_turn_pending = True  # Trigger AI turn after delay
+                                # Check if player won before triggering AI turn
+                                if grid.victor:
+                                    # Player won! Trigger ending story
+                                    game_state = 'loading_ending'
+                                    window = pygame.display.set_mode((STORY_WIDTH, STORY_HEIGHT), pygame.RESIZABLE)
+                                    current_width = STORY_WIDTH
+                                    current_height = STORY_HEIGHT
+
+                                    def load_ending_story():
+                                        nonlocal ending_story, story_loading, story_error, game_state
+                                        try:
+                                            player_won = (grid.victor == 'Player')
+                                            ending_story = story_gen.generate_ending_story(
+                                                opening_story, player_won
+                                            )
+                                            story_loading = False
+                                            game_state = 'story_ending'
+                                        except Exception as e:
+                                            story_error = f"Error generating ending: {str(e)}"
+                                            story_loading = False
+                                            game_state = 'story_ending'
+
+                                    threading.Thread(target=load_ending_story, daemon=True).start()
+                                else:
+                                    # Game continues - trigger AI turn
+                                    ai_turn_pending = True
                     else:
                         # Click outside grid and chat deactivates chat input
                         if not (temp_chat_width > 0 and check_button_click(x, y, chat_input_rect)):
@@ -755,11 +803,18 @@ def run_game():
             # Get unrevealed grids and let AI decide
             unrevealed = grid.get_unrevealed_cells()
             unrevealed_nums = [grid.get_grid_number(col, row) for col, row in unrevealed]
-            # Let opponent AI decide strategically
-            target_grid = opponent_ai.decide_next_move(unrevealed_nums)
-            col, row = grid.get_coords_from_number(target_grid)
-            grid.reveal_cell(col, row, 'ai')
-            opponent_ai.update_revealed_grid(target_grid, 'ai')
+            # CRITICAL: Filter out AI's own item location from targets
+            ai_item_location = grid.get_ai_bomb_location()
+            if ai_item_location in unrevealed_nums:
+                unrevealed_nums.remove(ai_item_location)
+            # Let opponent AI decide strategically (from valid targets only)
+            if unrevealed_nums:
+                target_grid = opponent_ai.decide_next_move(unrevealed_nums)
+                # Handle case where AI returns None (no valid targets)
+                if target_grid is not None:
+                    col, row = grid.get_coords_from_number(target_grid)
+                    grid.reveal_cell(col, row, 'ai')
+                    opponent_ai.update_revealed_grid(target_grid, 'ai')
             if grid.victor:
                 # Game ended - generate ending story
                 game_state = 'loading_ending'

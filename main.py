@@ -3,25 +3,31 @@ Bomb Hunt Game - Main Game Module
 
 A turn-based strategy game where a player competes against an AI to find
 each other's hidden bombs. Features include:
+- LLM-generated dynamic narratives (AI vs Humanity theme)
 - Difficulty selection (Easy, Medium, Hard)
 - Grid-based bomb placement
 - Turn-based gameplay with color-coded reveals
 - Dialog system for hints (with honesty/lie mechanics)
 - Grid numbering for easy identification
+- Outcome-based story endings
 
 Game Flow:
-1. Select difficulty level
-2. Player places bomb
-3. AI places bomb
-4. Dialog phase (exchange hints)
-5. Turn-based reveal phase
-6. Winner determination
+1. Opening story generation (LLM)
+2. Select difficulty level
+3. Player places bomb (beacon)
+4. AI places bomb (artifact)
+5. Dialog phase (exchange hints)
+6. Turn-based reveal phase
+7. Winner determination
+8. Ending story generation (LLM)
 """
 
 import pygame
 import random
+import threading
 
 from cell import Cell
+from story_generator import StoryGenerator
 
 
 # Color constants for game visuals
@@ -344,15 +350,48 @@ def ai_honesty_check():
     return random.randint(1, 2) == 1
 
 
+def wrap_text(text, font, max_width):
+    """
+    Wrap text to fit within a specified width.
+
+    Args:
+        text: Text to wrap
+        font: Pygame font object
+        max_width: Maximum width in pixels
+
+    Returns:
+        List of text lines that fit within max_width
+    """
+    words = text.split(' ')
+    lines = []
+    current_line = []
+
+    for word in words:
+        test_line = ' '.join(current_line + [word])
+        if font.size(test_line)[0] <= max_width:
+            current_line.append(word)
+        else:
+            if current_line:
+                lines.append(' '.join(current_line))
+            current_line = [word]
+
+    if current_line:
+        lines.append(' '.join(current_line))
+
+    return lines
+
+
 def run_game():
     """
     Main game loop and state management.
 
     Handles all game states:
+    - story_opening: Display LLM-generated opening narrative
     - difficulty_selection: Player chooses difficulty
-    - bomb_placement: Player places bomb, then AI places bomb
+    - bomb_placement: Player places bomb (beacon), then AI places bomb (artifact)
     - dialog: Exchange hints between player and AI
     - player_turn: Turn-based gameplay
+    - story_ending: Display outcome-based ending narrative
     - game_over: Show results and restart/quit options
     """
     # Initialize pygame
@@ -360,23 +399,34 @@ def run_game():
     # Game constants
     CELL_SIZE = 40  # Pixel size of each grid cell
     RIGHT_PANEL_WIDTH = 200  # Width of side panel for UI
+    STORY_WIDTH = 600  # Width for story display
+    STORY_HEIGHT = 500  # Height for story display
     # Font setup
     font = pygame.font.SysFont(None, 24)  # Standard font for text
     prompt_font = pygame.font.SysFont(None, 32)  # Larger font for prompts
     button_font = pygame.font.SysFont(None, 28)  # Font for buttons
     small_font = pygame.font.SysFont(None, 16)  # Small font for grid numbers
-    # Initial window size (for difficulty selection screen)
-    INITIAL_WIDTH = 400
-    INITIAL_HEIGHT = 300
+    story_font = pygame.font.SysFont(None, 22)  # Font for story text
+    # Initial window size (for story screen)
+    INITIAL_WIDTH = STORY_WIDTH
+    INITIAL_HEIGHT = STORY_HEIGHT
     window = pygame.display.set_mode((INITIAL_WIDTH, INITIAL_HEIGHT))
     pygame.display.set_caption("Bomb Hunt Game")
+    # Initialize story generator
+    story_gen = StoryGenerator()
     # Game state variables
-    game_state = 'difficulty_selection'
+    game_state = 'loading_story'
     difficulty = None
     grid = None
     GRID_WIDTH = 0
     GRID_HEIGHT = 0
     ai_turn_pending = False  # Flag for AI turn delay
+    # Story variables
+    opening_story = None
+    ending_story = None
+    mission_data = None  # Dict with player_item and ai_item
+    story_loading = False
+    story_error = None
     # Dialog state variables
     dialog_completed = False
     ai_hint_grid = None  # Grid number AI claims its bomb is at
@@ -386,6 +436,20 @@ def run_game():
     input_active = False  # Whether text input is active
     clock = pygame.time.Clock()
     running = True
+
+    # Start loading opening story in background thread
+    def load_opening_story():
+        nonlocal opening_story, mission_data, story_loading, story_error, game_state
+        story_loading = True
+        try:
+            opening_story, mission_data = story_gen.generate_opening_story()
+            game_state = 'story_opening'
+        except Exception as e:
+            story_error = str(e)
+            game_state = 'story_opening'
+        story_loading = False
+
+    threading.Thread(target=load_opening_story, daemon=True).start()
     # Main game loop
     while running:
         # Event handling
@@ -419,8 +483,15 @@ def run_game():
             # Handle mouse clicks
             if event.type == pygame.MOUSEBUTTONDOWN:
                 x, y = pygame.mouse.get_pos()
+                # Story opening screen - begin mission button
+                if game_state == 'story_opening':
+                    if opening_story:
+                        begin_rect = (STORY_WIDTH // 2 - 100, STORY_HEIGHT - 80, 200, 50)
+                        if check_button_click(x, y, begin_rect):
+                            window = pygame.display.set_mode((400, 300))
+                            game_state = 'difficulty_selection'
                 # Difficulty selection screen
-                if game_state == 'difficulty_selection':
+                elif game_state == 'difficulty_selection':
                     easy_rect = (100, 100, 200, 40)
                     medium_rect = (100, 150, 200, 40)
                     hard_rect = (100, 200, 200, 40)
@@ -466,24 +537,32 @@ def run_game():
                         ai_next_target = None
                         input_text = ""
                         input_active = False
-                # Game over screen - restart or quit
-                elif game_state == 'game_over':
-                    try_again_rect = (GRID_WIDTH * CELL_SIZE + 10, 120, 180, 40)
-                    quit_rect = (GRID_WIDTH * CELL_SIZE + 10, 170, 180, 40)
-                    if check_button_click(x, y, try_again_rect):
-                        grid.reset()
-                        game_state = 'difficulty_selection'
-                        grid = None
-                        window = pygame.display.set_mode((INITIAL_WIDTH, INITIAL_HEIGHT))
-                        ai_turn_pending = False
-                        dialog_completed = False
-                        ai_hint_grid = None
-                        player_hint_grid = None
-                        ai_next_target = None
-                        input_text = ""
-                        input_active = False
-                    elif check_button_click(x, y, quit_rect):
-                        running = False
+                # Story ending screen - restart or quit
+                elif game_state == 'story_ending':
+                    if ending_story:
+                        new_mission_rect = (STORY_WIDTH // 2 - 210, STORY_HEIGHT - 80, 180, 50)
+                        quit_rect = (STORY_WIDTH // 2 + 30, STORY_HEIGHT - 80, 180, 50)
+                        if check_button_click(x, y, new_mission_rect):
+                            # Start a new game
+                            grid.reset()
+                            game_state = 'loading_story'
+                            grid = None
+                            opening_story = None
+                            ending_story = None
+                            mission_data = None
+                            story_error = None
+                            window = pygame.display.set_mode((STORY_WIDTH, STORY_HEIGHT))
+                            ai_turn_pending = False
+                            dialog_completed = False
+                            ai_hint_grid = None
+                            player_hint_grid = None
+                            ai_next_target = None
+                            input_text = ""
+                            input_active = False
+                            # Load new opening story
+                            threading.Thread(target=load_opening_story, daemon=True).start()
+                        elif check_button_click(x, y, quit_rect):
+                            running = False
                 # Dialog screen - ask AI for help
                 elif game_state == 'dialog':
                     ask_button = (GRID_WIDTH * CELL_SIZE + 10, 150, 180, 40)
@@ -513,14 +592,94 @@ def run_game():
             grid.ai_reveal(ai_next_target)  # AI reveals (uses hint if available)
             ai_next_target = None  # Clear hint after use
             if grid.victor:
-                game_state = 'game_over'
+                # Game ended - generate ending story
+                game_state = 'loading_ending'
+                window = pygame.display.set_mode((STORY_WIDTH, STORY_HEIGHT))
+
+                def load_ending_story():
+                    nonlocal ending_story, story_loading, story_error, game_state
+                    story_loading = True
+                    try:
+                        player_won = grid.victor == 'Player'
+                        ending_story = story_gen.generate_ending_story(
+                            opening_story, player_won
+                        )
+                        game_state = 'story_ending'
+                    except Exception as e:
+                        story_error = str(e)
+                        game_state = 'story_ending'
+                    story_loading = False
+
+                threading.Thread(target=load_ending_story, daemon=True).start()
             else:
                 grid.player_turn = True  # Switch back to player
             ai_turn_pending = False
         # Rendering
         window.fill(WHITE)
         # Render current game state
-        if game_state == 'difficulty_selection':
+        if game_state == 'loading_story':
+            # Show loading screen while generating opening story
+            loading_text = prompt_font.render("Generating Mission...", True, BLACK)
+            window.blit(loading_text, (STORY_WIDTH // 2 - 150, STORY_HEIGHT // 2 - 20))
+            spinner_text = story_font.render("Please wait...", True, BLACK)
+            window.blit(spinner_text, (STORY_WIDTH // 2 - 70, STORY_HEIGHT // 2 + 20))
+        elif game_state == 'story_opening':
+            # Display opening story
+            if story_error:
+                error_text = prompt_font.render("Story Generation Error", True, BLACK)
+                window.blit(error_text, (50, 50))
+                error_msg = story_font.render(f"Error: {story_error}", True, BLACK)
+                window.blit(error_msg, (50, 100))
+            elif opening_story:
+                title_text = prompt_font.render("MISSION BRIEFING", True, BLACK)
+                window.blit(title_text, (STORY_WIDTH // 2 - 120, 30))
+                # Wrap and display story text
+                wrapped_lines = wrap_text(opening_story, story_font, STORY_WIDTH - 100)
+                y_offset = 100
+                for line in wrapped_lines:
+                    line_surface = story_font.render(line, True, BLACK)
+                    window.blit(line_surface, (50, y_offset))
+                    y_offset += 30
+                # Begin mission button
+                begin_rect = (STORY_WIDTH // 2 - 100, STORY_HEIGHT - 80, 200, 50)
+                pygame.draw.rect(window, (100, 200, 100), begin_rect)
+                begin_text = button_font.render("BEGIN MISSION", True, WHITE)
+                window.blit(begin_text, (begin_rect[0] + 30, begin_rect[1] + 12))
+        elif game_state == 'loading_ending':
+            # Show loading screen while generating ending story
+            loading_text = prompt_font.render("Processing Outcome...", True, BLACK)
+            window.blit(loading_text, (STORY_WIDTH // 2 - 160, STORY_HEIGHT // 2 - 20))
+            spinner_text = story_font.render("Please wait...", True, BLACK)
+            window.blit(spinner_text, (STORY_WIDTH // 2 - 70, STORY_HEIGHT // 2 + 20))
+        elif game_state == 'story_ending':
+            # Display ending story
+            if story_error:
+                error_text = prompt_font.render("Story Generation Error", True, BLACK)
+                window.blit(error_text, (50, 50))
+                error_msg = story_font.render(f"Error: {story_error}", True, BLACK)
+                window.blit(error_msg, (50, 100))
+            elif ending_story:
+                result = "MISSION SUCCESS" if grid.victor == 'Player' else "MISSION FAILED"
+                color = (50, 150, 50) if grid.victor == 'Player' else (150, 50, 50)
+                title_text = prompt_font.render(result, True, color)
+                window.blit(title_text, (STORY_WIDTH // 2 - 120, 30))
+                # Wrap and display story text
+                wrapped_lines = wrap_text(ending_story, story_font, STORY_WIDTH - 100)
+                y_offset = 100
+                for line in wrapped_lines:
+                    line_surface = story_font.render(line, True, BLACK)
+                    window.blit(line_surface, (50, y_offset))
+                    y_offset += 30
+                # New Mission and Quit buttons
+                new_mission_rect = (STORY_WIDTH // 2 - 210, STORY_HEIGHT - 80, 180, 50)
+                quit_rect = (STORY_WIDTH // 2 + 30, STORY_HEIGHT - 80, 180, 50)
+                pygame.draw.rect(window, (100, 200, 100), new_mission_rect)  # Green
+                pygame.draw.rect(window, (200, 100, 100), quit_rect)  # Red
+                new_mission_text = button_font.render("NEW MISSION", True, WHITE)
+                quit_text = button_font.render("QUIT", True, WHITE)
+                window.blit(new_mission_text, (new_mission_rect[0] + 30, new_mission_rect[1] + 12))
+                window.blit(quit_text, (quit_rect[0] + 65, quit_rect[1] + 12))
+        elif game_state == 'difficulty_selection':
             # Draw difficulty selection buttons
             prompt_text = prompt_font.render("Select Difficulty", True, BLACK)
             window.blit(prompt_text, (100, 50))
@@ -546,21 +705,26 @@ def run_game():
             prompt_y = 20
             # Render state-specific UI
             if game_state == 'bomb_placement':
-                prompt_text = prompt_font.render("Hide your bomb", True, BLACK)
+                # Use mission-specific terminology from the story
+                player_item = mission_data['player_item'] if mission_data else "bomb"
+                prompt_text = prompt_font.render(f"Hide your {player_item}", True, BLACK)
                 window.blit(prompt_text, (GRID_WIDTH * CELL_SIZE + 10, prompt_y))
             elif game_state == 'dialog':
-                # Dialog phase UI
-                prompt_text = prompt_font.render("Ask AI for help", True, BLACK)
+                # Dialog phase UI - use mission-specific terminology
+                ai_item = mission_data['ai_item'] if mission_data else "target"
+                prompt_text = prompt_font.render(f"Locate {ai_item}", True, BLACK)
                 window.blit(prompt_text, (GRID_WIDTH * CELL_SIZE + 10, prompt_y))
                 if ai_hint_grid:
-                    # Show AI's response
-                    hint_text = f"AI says: Grid {ai_hint_grid}"
+                    # Show AI's response with mission-specific terminology
+                    ai_item = mission_data['ai_item'] if mission_data else "target"
+                    hint_text = f"AI says: {ai_item.capitalize()} at grid {ai_hint_grid}"
                     hint_surface = button_font.render(hint_text, True, BLACK)
                     window.blit(hint_surface, (GRID_WIDTH * CELL_SIZE + 10, 60))
-                    # Show AI's question to player
-                    ai_question = button_font.render("AI asks: Where is", True, BLACK)
+                    # Show AI's question to player with mission-specific terminology
+                    player_item = mission_data['player_item'] if mission_data else "position"
+                    ai_question = button_font.render(f"AI asks: Where is your", True, BLACK)
                     window.blit(ai_question, (GRID_WIDTH * CELL_SIZE + 10, 100))
-                    ai_question2 = button_font.render("your bomb?", True, BLACK)
+                    ai_question2 = button_font.render(f"{player_item}?", True, BLACK)
                     window.blit(ai_question2, (GRID_WIDTH * CELL_SIZE + 10, 120))
                     # Show input field if dialog not completed
                     if not dialog_completed:
@@ -575,29 +739,16 @@ def run_game():
                     ask_text = button_font.render("Ask AI", True, WHITE)
                     window.blit(ask_text, (ask_button_rect[0] + 60, ask_button_rect[1] + 10))
             elif game_state == 'player_turn':
-                # Show whose turn it is
+                # Show whose turn it is with mission-specific terminology
                 if grid.player_turn:
-                    prompt_text = prompt_font.render("Find the bomb", True, BLACK)
+                    ai_item = mission_data['ai_item'] if mission_data else "target"
+                    prompt_text = prompt_font.render(f"Find {ai_item}", True, BLACK)
                     window.blit(prompt_text, (GRID_WIDTH * CELL_SIZE + 10,
                                               prompt_y))
                 else:
                     prompt_text = prompt_font.render("AI's turn...", True, BLACK)
                     window.blit(prompt_text, (GRID_WIDTH * CELL_SIZE + 10,
                                               prompt_y))
-            elif game_state == 'game_over':
-                # Show game result and restart/quit buttons
-                result_text = "You win!" if grid.victor == 'Player' else "You lose!"
-                prompt_text = prompt_font.render(result_text, True, BLACK)
-                window.blit(prompt_text, (GRID_WIDTH * CELL_SIZE + 10, prompt_y))
-                try_again_rect = (GRID_WIDTH * CELL_SIZE + 10, 120, 180, 40)
-                quit_rect = (GRID_WIDTH * CELL_SIZE + 10, 170, 180, 40)
-                pygame.draw.rect(window, (100, 200, 100), try_again_rect)  # Green
-                pygame.draw.rect(window, (200, 100, 100), quit_rect)  # Red
-                try_again_text = button_font.render("Try Again", True, WHITE)
-                quit_text = button_font.render("Quit", True, WHITE)
-                window.blit(try_again_text,
-                            (try_again_rect[0] + 50, try_again_rect[1] + 10))
-                window.blit(quit_text, (quit_rect[0] + 70, quit_rect[1] + 10))
         # Update display and maintain 60 FPS
         pygame.display.flip()
         clock.tick(60)

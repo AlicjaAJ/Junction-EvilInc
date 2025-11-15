@@ -31,14 +31,31 @@ from story_generator import StoryGenerator
 from opponent_ai import OpponentAI
 
 
-# Color constants for game visuals
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-RED = (220, 0, 0)  # Red for timer warning
-PLAYER_COLOR = (180, 220, 255)  # Light blue for player reveals
-AI_COLOR = (255, 180, 180)  # Light red for AI reveals
-WIN_COLOR = (180, 255, 180)  # Green for winning reveal (bomb found)
-PANEL_COLOR = (200, 200, 200)  # Gray for side panel
+# Cyberpunk CRT Color Scheme (inspired by design reference)
+BLACK = (0, 0, 0)  # Background
+CYAN_700 = (14, 116, 144)  # Dark cyan for borders
+CYAN_600 = (8, 145, 178)  # Cyan borders
+CYAN_500 = (6, 182, 212)  # Primary cyan accent
+CYAN_400 = (34, 211, 238)  # Bright cyan (hover/glow)
+CYAN_300 = (103, 232, 249)  # Lightest cyan
+BLUE_500 = (59, 130, 246)  # Player reveals (semi-transparent look)
+BLUE_600 = (37, 99, 235)  # Player borders
+RED_500 = (239, 68, 68)  # AI reveals/errors
+RED_600 = (220, 38, 38)  # AI borders
+RED_400 = (248, 113, 113)  # Light red (hover)
+GREEN_300 = (134, 239, 172)  # Light green (hover)
+GREEN_500 = (34, 197, 94)  # Success/winning cell
+GREEN_600 = (22, 163, 74)  # Success border
+GREEN_700 = (21, 128, 61)  # Dark green border
+YELLOW_500 = (234, 179, 8)  # Warnings
+WHITE = (255, 255, 255)  # Text
+GRAY = (113, 113, 130)  # Muted text
+# Legacy constants for compatibility
+PLAYER_COLOR = BLUE_500
+AI_COLOR = RED_500
+WIN_COLOR = GREEN_500
+PANEL_COLOR = (20, 20, 20)  # Very dark panel
+RED = RED_500  # For timer warnings
 
 
 class Grid:
@@ -296,7 +313,7 @@ class Grid:
 
     def draw(self, surface, font, small_font, x_offset=0, y_offset=0):
         """
-        Render the grid on the given surface.
+        Render the grid with cyberpunk CRT styling.
 
         Args:
             surface: Pygame surface to draw on
@@ -305,35 +322,67 @@ class Grid:
             x_offset: Horizontal offset for centering the grid
             y_offset: Vertical offset for centering the grid
         """
+        # Draw outer glow border around entire grid
+        grid_outer_rect = pygame.Rect(
+            x_offset - 6, y_offset - 6,
+            self.width * self.cell_size + 12, self.height * self.cell_size + 12
+        )
+        # Glow effect (multiple borders)
+        for i in range(3, 0, -1):
+            alpha = 40 * (4 - i)
+            glow_surf = pygame.Surface((grid_outer_rect.width + i*2, grid_outer_rect.height + i*2))
+            glow_surf.set_alpha(alpha)
+            glow_surf.fill(CYAN_500)
+            surface.blit(glow_surf, (grid_outer_rect.x - i, grid_outer_rect.y - i))
+        
+        # Draw thick cyan border around grid
+        pygame.draw.rect(surface, CYAN_500, grid_outer_rect, 6)
+
         for x in range(self.width):
             for y in range(self.height):
                 cell = self.cells[x][y]
                 # Calculate cell rectangle position with offset
-                rect = (x * self.cell_size + x_offset, y * self.cell_size + y_offset,
-                        self.cell_size, self.cell_size)
-                # Draw cell border
-                pygame.draw.rect(surface, BLACK, rect, 1)
-                # Draw grid number in top-left corner
-                grid_num = self.get_grid_number(x, y)
-                num_text = small_font.render(str(grid_num), True, (100, 100, 100))
-                surface.blit(num_text, (x * self.cell_size + x_offset + 2,
-                                        y * self.cell_size + y_offset + 2))
-                # Draw revealed cells with appropriate color
+                rect = pygame.Rect(
+                    x * self.cell_size + x_offset,
+                    y * self.cell_size + y_offset,
+                    self.cell_size,
+                    self.cell_size
+                )
+                
+                # Determine cell color and border
                 if cell.revealed:
                     # Green if bomb found (winning reveal)
                     if cell.item_type and cell.item_type[0] in ['P', 'A']:
-                        color = WIN_COLOR
-                    # Blue for player reveals, red for AI reveals
+                        color = GREEN_500
+                        border_color = GREEN_700
+                    # Blue for player reveals
                     elif cell.revealed_by == 'player':
-                        color = PLAYER_COLOR
+                        color = BLUE_500
+                        border_color = BLUE_600
+                    # Red for AI reveals
                     else:
-                        color = AI_COLOR
+                        color = RED_500
+                        border_color = RED_600
+                    
+                    # Draw filled cell
                     pygame.draw.rect(surface, color, rect)
+                    # Draw thick border
+                    pygame.draw.rect(surface, border_color, rect, 4)
+                    
                     # Draw bomb letter if cell contains a bomb
                     if cell.item_type:
                         text = font.render(cell.item_type[0], True, BLACK)
-                        surface.blit(text, (x * self.cell_size + x_offset + 5,
-                                            y * self.cell_size + y_offset + 5))
+                        text_rect = text.get_rect(center=rect.center)
+                        surface.blit(text, text_rect)
+                else:
+                    # Unrevealed cell - black with cyan border
+                    pygame.draw.rect(surface, BLACK, rect)
+                    pygame.draw.rect(surface, CYAN_700, rect, 4)
+                    
+                    # Draw grid number in top-left corner
+                    grid_num = self.get_grid_number(x, y)
+                    num_text = small_font.render(str(grid_num), True, CYAN_700)
+                    surface.blit(num_text, (rect.x + 4, rect.y + 4))
 
 
 
@@ -412,6 +461,75 @@ def get_difficulty_attempts(difficulty):
     return 5  # Default to easy
 
 
+def draw_cyberpunk_button(surface, rect, text, font, is_hovered=False, color_scheme='cyan'):
+    """
+    Draw a button with cyberpunk CRT styling (thick borders, neon glow).
+    
+    Args:
+        surface: Pygame surface to draw on
+        rect: Button rectangle (x, y, width, height) or tuple
+        text: Button text
+        font: Pygame font
+        is_hovered: Whether mouse is hovering over button
+        color_scheme: 'cyan', 'green', 'red', or 'yellow'
+    """
+    # Choose colors based on scheme
+    if color_scheme == 'cyan':
+        border_color = CYAN_600 if not is_hovered else CYAN_400
+        text_color = CYAN_400 if not is_hovered else CYAN_300
+        glow_color = CYAN_500
+    elif color_scheme == 'green':
+        border_color = GREEN_600 if not is_hovered else GREEN_500
+        text_color = GREEN_500 if not is_hovered else GREEN_300
+        glow_color = GREEN_500
+    elif color_scheme == 'red':
+        border_color = RED_600 if not is_hovered else RED_500
+        text_color = RED_500 if not is_hovered else RED_400
+        glow_color = RED_500
+    else:  # yellow
+        border_color = YELLOW_500
+        text_color = YELLOW_500
+        glow_color = YELLOW_500
+    
+    button_rect = pygame.Rect(rect)
+    
+    # Draw glow effect on hover
+    if is_hovered:
+        for i in range(2, 0, -1):
+            glow_surf = pygame.Surface((button_rect.width + i*4, button_rect.height + i*4))
+            glow_surf.set_alpha(60 * (3 - i))
+            glow_surf.fill(glow_color)
+            surface.blit(glow_surf, (button_rect.x - i*2, button_rect.y - i*2))
+    
+    # Draw button background (black)
+    pygame.draw.rect(surface, BLACK, button_rect)
+    # Draw thick border
+    pygame.draw.rect(surface, border_color, button_rect, 6)
+    
+    # Draw text (centered)
+    text_surf = font.render(text, True, text_color)
+    text_rect = text_surf.get_rect(center=button_rect.center)
+    surface.blit(text_surf, text_rect)
+
+
+def draw_scanlines(surface, opacity=20):
+    """
+    Draw horizontal scanlines for CRT effect.
+    
+    Args:
+        surface: Pygame surface to draw on
+        opacity: Alpha transparency (0-255)
+    """
+    width, height = surface.get_size()
+    scanline_surf = pygame.Surface((width, height), pygame.SRCALPHA)
+    
+    # Draw horizontal lines every 4 pixels
+    for y in range(0, height, 4):
+        pygame.draw.line(scanline_surf, (*CYAN_500, opacity), (0, y), (width, y), 1)
+    
+    surface.blit(scanline_surf, (0, 0))
+
+
 def ai_honesty_check():
     """
     DEPRECATED: Previously used to determine AI honesty.
@@ -474,14 +592,21 @@ def draw_chat_sidebar(surface, x, y, width, height, opponent_ai, chat_input, cha
         font: Regular font for chat text
         small_font: Small font for labels
     """
-    # Background
-    pygame.draw.rect(surface, (240, 240, 245), (x, y, width, height))
-    pygame.draw.rect(surface, (100, 100, 120), (x, y, width, height), 2)
+    # Background (cyberpunk styling)
+    panel_rect = pygame.Rect(x, y, width, height)
+    pygame.draw.rect(surface, BLACK, panel_rect)
+    # Glow effect
+    for i in range(2, 0, -1):
+        glow_surf = pygame.Surface((width + i*2, height + i*2))
+        glow_surf.set_alpha(40 * (3 - i))
+        glow_surf.fill(CYAN_500)
+        surface.blit(glow_surf, (x - i, y - i))
+    pygame.draw.rect(surface, CYAN_600, panel_rect, 6)
     
     # Title with message count
     msg_count = len(opponent_ai.get_chat_history())
-    title_text = f"AI Opponent Chat ({msg_count // 2})"  # Divide by 2 for msg pairs
-    title = font.render(title_text, True, (0, 0, 0))
+    title_text = f">> AI_OPPONENT_CHAT ({msg_count // 2})"  # Divide by 2 for msg pairs
+    title = font.render(title_text, True, CYAN_300)
     surface.blit(title, (x + 10, y + 10))
     
     # Chat history area
@@ -489,8 +614,8 @@ def draw_chat_sidebar(surface, x, y, width, height, opponent_ai, chat_input, cha
     chat_area_y = y + 45
     chat_area_width = width - 10
     chat_area_height = height - 95
-    pygame.draw.rect(surface, (255, 255, 255), (chat_area_x, chat_area_y, chat_area_width, chat_area_height))
-    pygame.draw.rect(surface, (180, 180, 180), (chat_area_x, chat_area_y, chat_area_width, chat_area_height), 1)
+    pygame.draw.rect(surface, BLACK, (chat_area_x, chat_area_y, chat_area_width, chat_area_height))
+    pygame.draw.rect(surface, CYAN_700, (chat_area_x, chat_area_y, chat_area_width, chat_area_height), 3)
     
     # Calculate all wrapped lines first to enable auto-scroll
     chat_history = opponent_ai.get_chat_history()
@@ -502,19 +627,18 @@ def draw_chat_sidebar(surface, x, y, width, height, opponent_ai, chat_input, cha
     # Show help text if no messages yet
     if not chat_history:
         help_lines = [
-            "Click the input box below to chat",
-            "with your AI opponent!",
-            "",
-            "Ask about strategy, request hints,",
-            "or engage in conversation."
+            ">> CLICK_INPUT_BOX_TO_CHAT",
+            ">> ASK_FOR_HINTS",
+            ">> REQUEST_STRATEGY",
+            ">> ENGAGE_AI_OPPONENT"
         ]
         for help_line in help_lines:
-            all_lines.append((help_line, (120, 120, 120), None))
+            all_lines.append((help_line, CYAN_700, None))
     
     for sender, message in chat_history:
-        color = (20, 80, 180) if sender == 'player' else (180, 40, 40)
-        bg_color = (230, 240, 255) if sender == 'player' else (255, 240, 230)
-        prefix = "You: " if sender == 'player' else "AI: "
+        color = BLUE_500 if sender == 'player' else RED_500
+        bg_color = (20, 40, 80) if sender == 'player' else (80, 20, 20)
+        prefix = ">> YOU: " if sender == 'player' else ">> AI: "
         
         # Wrap message with proper width
         wrapped = wrap_text(prefix + message, small_font, available_width)
@@ -551,25 +675,25 @@ def draw_chat_sidebar(surface, x, y, width, height, opponent_ai, chat_input, cha
     
     # Loading indicator
     if ai_response_loading:
-        loading_text = small_font.render("AI is typing...", True, (150, 150, 150))
+        loading_text = small_font.render(">> AI_PROCESSING...", True, CYAN_400)
         surface.blit(loading_text, (chat_area_x + text_margin, y_offset))
     
-    # Input box
+    # Input box (cyberpunk styling)
     input_y = y + height - 45
-    input_box_color = (100, 100, 250) if chat_input_active else (200, 200, 200)
-    pygame.draw.rect(surface, (255, 255, 255), (x + 5, input_y, width - 10, 35))
-    pygame.draw.rect(surface, input_box_color, (x + 5, input_y, width - 10, 35), 2)
+    input_box_color = CYAN_500 if chat_input_active else CYAN_700
+    pygame.draw.rect(surface, BLACK, (x + 5, input_y, width - 10, 35))
+    pygame.draw.rect(surface, input_box_color, (x + 5, input_y, width - 10, 35), 4)
     
-    # Input text with wrapping/truncation
+    # Input text with wrapping/truncation (cyberpunk styling)
     if chat_input:
         # Wrap input text if too long
         input_width = width - 30
         wrapped_input = wrap_text(chat_input, small_font, input_width)
         # Show only the last line if multiple lines (most recent typing)
         display_text = wrapped_input[-1] if wrapped_input else chat_input
-        input_surf = small_font.render(display_text, True, (0, 0, 0))
+        input_surf = small_font.render(display_text, True, CYAN_300)
     else:
-        input_surf = small_font.render("Type your message...", True, (150, 150, 150))
+        input_surf = small_font.render(">> TYPE_MESSAGE...", True, CYAN_700)
     surface.blit(input_surf, (x + 10, input_y + 8))
 
 
@@ -592,8 +716,8 @@ def run_game():
     CELL_SIZE = 40  # Pixel size of each grid cell
     CHAT_PANEL_WIDTH = 400  # Width of chat sidebar on the right
     GRID_TOP_MARGIN = 100  # Space above grid for timer and prompts
-    STORY_WIDTH = 600  # Width for story display
-    STORY_HEIGHT = 500  # Height for story display
+    STORY_WIDTH = 900  # Width for story display (increased for better text visibility)
+    STORY_HEIGHT = 700  # Height for story display (increased for better text visibility)
     # Font setup
     font = pygame.font.SysFont(None, 24)  # Standard font for text
     prompt_font = pygame.font.SysFont(None, 32)  # Larger font for prompts
@@ -699,23 +823,26 @@ def run_game():
                     if opening_story:
                         begin_rect = (current_width // 2 - 100, current_height - 80, 200, 50)
                         if check_button_click(x, y, begin_rect):
-                            window = pygame.display.set_mode((400, 300), pygame.RESIZABLE)
-                            current_width = 400
-                            current_height = 300
+                            # Keep current window size (don't resize)
                             game_state = 'difficulty_selection'
                 # Difficulty selection screen
                 elif game_state == 'difficulty_selection':
-                    easy_rect = (100, 100, 200, 40)
-                    medium_rect = (100, 150, 200, 40)
-                    hard_rect = (100, 200, 200, 40)
+                    # Use same button positions as rendering (centered)
+                    button_width, button_height = 250, 50
+                    start_y = current_height // 2 - 100
+                    button_x = (current_width - button_width) // 2
+                    easy_rect = (button_x, start_y, button_width, button_height)
+                    medium_rect = (button_x, start_y + 70, button_width, button_height)
+                    hard_rect = (button_x, start_y + 140, button_width, button_height)
                     if check_button_click(x, y, easy_rect):
                         difficulty = 'easy'
                         GRID_WIDTH = GRID_HEIGHT = get_difficulty_size(difficulty)
                         timer_duration = get_difficulty_timer(difficulty)
                         max_attempts = get_difficulty_attempts(difficulty)
                         attempts_used = 0
-                        WINDOW_WIDTH = GRID_WIDTH * CELL_SIZE + CHAT_PANEL_WIDTH + 20
-                        WINDOW_HEIGHT = GRID_HEIGHT * CELL_SIZE + GRID_TOP_MARGIN + 20
+                        # Calculate window size with proper margins (at least story screen size)
+                        WINDOW_WIDTH = max(STORY_WIDTH, GRID_WIDTH * CELL_SIZE + CHAT_PANEL_WIDTH + 60)
+                        WINDOW_HEIGHT = max(STORY_HEIGHT, GRID_HEIGHT * CELL_SIZE + GRID_TOP_MARGIN + 80)
                         window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
                         current_width = WINDOW_WIDTH
                         current_height = WINDOW_HEIGHT
@@ -734,8 +861,9 @@ def run_game():
                         timer_duration = get_difficulty_timer(difficulty)
                         max_attempts = get_difficulty_attempts(difficulty)
                         attempts_used = 0
-                        WINDOW_WIDTH = GRID_WIDTH * CELL_SIZE + CHAT_PANEL_WIDTH + 20
-                        WINDOW_HEIGHT = GRID_HEIGHT * CELL_SIZE + GRID_TOP_MARGIN + 20
+                        # Calculate window size with proper margins (at least story screen size)
+                        WINDOW_WIDTH = max(STORY_WIDTH, GRID_WIDTH * CELL_SIZE + CHAT_PANEL_WIDTH + 60)
+                        WINDOW_HEIGHT = max(STORY_HEIGHT, GRID_HEIGHT * CELL_SIZE + GRID_TOP_MARGIN + 80)
                         window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
                         current_width = WINDOW_WIDTH
                         current_height = WINDOW_HEIGHT
@@ -754,8 +882,9 @@ def run_game():
                         timer_duration = get_difficulty_timer(difficulty)
                         max_attempts = get_difficulty_attempts(difficulty)
                         attempts_used = 0
-                        WINDOW_WIDTH = GRID_WIDTH * CELL_SIZE + CHAT_PANEL_WIDTH + 20
-                        WINDOW_HEIGHT = GRID_HEIGHT * CELL_SIZE + GRID_TOP_MARGIN + 20
+                        # Calculate window size with proper margins (at least story screen size)
+                        WINDOW_WIDTH = max(STORY_WIDTH, GRID_WIDTH * CELL_SIZE + CHAT_PANEL_WIDTH + 60)
+                        WINDOW_HEIGHT = max(STORY_HEIGHT, GRID_HEIGHT * CELL_SIZE + GRID_TOP_MARGIN + 80)
                         window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
                         current_width = WINDOW_WIDTH
                         current_height = WINDOW_HEIGHT
@@ -952,86 +1081,96 @@ def run_game():
                 grid.player_turn = True  # Switch back to player
             ai_turn_pending = False
         # Rendering
-        window.fill(WHITE)
+        window.fill(BLACK)  # Cyberpunk black background
+        # Add scanline overlay for CRT effect
+        draw_scanlines(window, opacity=15)
         # Render current game state (use current_width and current_height for dynamic sizing)
         if game_state == 'loading_story':
             # Show loading screen while generating opening story
-            loading_text = prompt_font.render("Generating Mission...", True, BLACK)
-            window.blit(loading_text, (current_width // 2 - 150, current_height // 2 - 20))
-            spinner_text = story_font.render("Please wait...", True, BLACK)
-            window.blit(spinner_text, (current_width // 2 - 70, current_height // 2 + 20))
+            loading_text = prompt_font.render(">> GENERATING_MISSION...", True, CYAN_400)
+            text_rect = loading_text.get_rect(center=(current_width // 2, current_height // 2 - 20))
+            window.blit(loading_text, text_rect)
+            spinner_text = story_font.render(">> INITIALIZING_QUANTUM_PARAMETERS...", True, CYAN_700)
+            text_rect2 = spinner_text.get_rect(center=(current_width // 2, current_height // 2 + 20))
+            window.blit(spinner_text, text_rect2)
         elif game_state == 'story_opening':
             # Display opening story
             if story_error:
-                error_text = prompt_font.render("Story Generation Error", True, BLACK)
+                error_text = prompt_font.render(">> ERROR", True, RED_500)
                 window.blit(error_text, (50, 50))
-                error_msg = story_font.render(f"Error: {story_error}", True, BLACK)
+                error_msg = story_font.render(f"{story_error}", True, RED_500)
                 window.blit(error_msg, (50, 100))
             elif opening_story:
-                title_text = prompt_font.render("MISSION BRIEFING", True, BLACK)
-                window.blit(title_text, (current_width // 2 - 120, 30))
+                title_text = prompt_font.render(">> MISSION_BRIEFING", True, CYAN_400)
+                title_rect = title_text.get_rect(center=(current_width // 2, 40))
+                window.blit(title_text, title_rect)
                 # Wrap and display story text dynamically based on window width
                 wrapped_lines = wrap_text(opening_story, story_font, current_width - 100)
-                y_offset = 100
+                y_offset = 90
                 for line in wrapped_lines:
-                    line_surface = story_font.render(line, True, BLACK)
+                    line_surface = story_font.render(line, True, WHITE)
                     window.blit(line_surface, (50, y_offset))
                     y_offset += 30
-                # Begin mission button
+                # Begin mission button with cyberpunk styling
                 begin_rect = (current_width // 2 - 100, current_height - 80, 200, 50)
-                pygame.draw.rect(window, (100, 200, 100), begin_rect)
-                begin_text = button_font.render("BEGIN MISSION", True, WHITE)
-                window.blit(begin_text, (begin_rect[0] + 30, begin_rect[1] + 12))
+                mouse_pos = pygame.mouse.get_pos()
+                is_hovered = check_button_click(mouse_pos[0], mouse_pos[1], begin_rect)
+                draw_cyberpunk_button(window, begin_rect, "BEGIN MISSION", button_font, is_hovered, 'green')
         elif game_state == 'loading_ending':
             # Show loading screen while generating ending story
-            loading_text = prompt_font.render("Processing Outcome...", True, BLACK)
-            window.blit(loading_text, (current_width // 2 - 160, current_height // 2 - 20))
-            spinner_text = story_font.render("Please wait...", True, BLACK)
-            window.blit(spinner_text, (current_width // 2 - 70, current_height // 2 + 20))
+            loading_text = prompt_font.render(">> ANALYZING_OUTCOME...", True, CYAN_400)
+            text_rect = loading_text.get_rect(center=(current_width // 2, current_height // 2 - 20))
+            window.blit(loading_text, text_rect)
+            spinner_text = story_font.render(">> TIMELINE_CONVERGENCE_PROCESSING...", True, CYAN_700)
+            text_rect2 = spinner_text.get_rect(center=(current_width // 2, current_height // 2 + 20))
+            window.blit(spinner_text, text_rect2)
         elif game_state == 'story_ending':
             # Display ending story
             if story_error:
-                error_text = prompt_font.render("Story Generation Error", True, BLACK)
+                error_text = prompt_font.render(">> ERROR", True, RED_500)
                 window.blit(error_text, (50, 50))
-                error_msg = story_font.render(f"Error: {story_error}", True, BLACK)
+                error_msg = story_font.render(f"{story_error}", True, RED_500)
                 window.blit(error_msg, (50, 100))
             elif ending_story:
-                result = "MISSION SUCCESS" if grid.victor == 'Player' else "MISSION FAILED"
-                color = (50, 150, 50) if grid.victor == 'Player' else (150, 50, 50)
+                result = ">> MISSION_SUCCESS" if grid.victor == 'Player' else ">> MISSION_FAILED"
+                color = GREEN_500 if grid.victor == 'Player' else RED_500
                 title_text = prompt_font.render(result, True, color)
-                window.blit(title_text, (current_width // 2 - 120, 30))
+                title_rect = title_text.get_rect(center=(current_width // 2, 40))
+                window.blit(title_text, title_rect)
                 # Wrap and display story text dynamically based on window width
                 wrapped_lines = wrap_text(ending_story, story_font, current_width - 100)
-                y_offset = 100
+                y_offset = 90
                 for line in wrapped_lines:
-                    line_surface = story_font.render(line, True, BLACK)
+                    line_surface = story_font.render(line, True, WHITE)
                     window.blit(line_surface, (50, y_offset))
                     y_offset += 30
-                # New Mission and Quit buttons
+                # New Mission and Quit buttons with cyberpunk styling
                 new_mission_rect = (current_width // 2 - 210, current_height - 80, 180, 50)
                 quit_rect = (current_width // 2 + 30, current_height - 80, 180, 50)
-                pygame.draw.rect(window, (100, 200, 100), new_mission_rect)  # Green
-                pygame.draw.rect(window, (200, 100, 100), quit_rect)  # Red
-                new_mission_text = button_font.render("NEW MISSION", True, WHITE)
-                quit_text = button_font.render("QUIT", True, WHITE)
-                window.blit(new_mission_text, (new_mission_rect[0] + 30, new_mission_rect[1] + 12))
-                window.blit(quit_text, (quit_rect[0] + 65, quit_rect[1] + 12))
+                mouse_pos = pygame.mouse.get_pos()
+                is_new_hovered = check_button_click(mouse_pos[0], mouse_pos[1], new_mission_rect)
+                is_quit_hovered = check_button_click(mouse_pos[0], mouse_pos[1], quit_rect)
+                draw_cyberpunk_button(window, new_mission_rect, "NEW MISSION", button_font, is_new_hovered, 'green')
+                draw_cyberpunk_button(window, quit_rect, "QUIT", button_font, is_quit_hovered, 'red')
         elif game_state == 'difficulty_selection':
-            # Draw difficulty selection buttons
-            prompt_text = prompt_font.render("Select Difficulty", True, BLACK)
-            window.blit(prompt_text, (100, 50))
-            easy_rect = (100, 100, 200, 40)
-            medium_rect = (100, 150, 200, 40)
-            hard_rect = (100, 200, 200, 40)
-            pygame.draw.rect(window, (100, 200, 100), easy_rect)  # Green
-            pygame.draw.rect(window, (200, 200, 100), medium_rect)  # Yellow
-            pygame.draw.rect(window, (200, 100, 100), hard_rect)  # Red
-            easy_text = button_font.render("Easy", True, WHITE)
-            medium_text = button_font.render("Medium", True, WHITE)
-            hard_text = button_font.render("Hard", True, WHITE)
-            window.blit(easy_text, (easy_rect[0] + 80, easy_rect[1] + 10))
-            window.blit(medium_text, (medium_rect[0] + 70, medium_rect[1] + 10))
-            window.blit(hard_text, (hard_rect[0] + 80, hard_rect[1] + 10))
+            # Draw difficulty selection buttons with cyberpunk styling
+            prompt_text = prompt_font.render(">> SELECT_DIFFICULTY", True, CYAN_400)
+            prompt_rect = prompt_text.get_rect(center=(current_width // 2, 60))
+            window.blit(prompt_text, prompt_rect)
+            # Center buttons horizontally
+            button_width, button_height = 250, 50
+            start_y = current_height // 2 - 100
+            button_x = (current_width - button_width) // 2
+            easy_rect = (button_x, start_y, button_width, button_height)
+            medium_rect = (button_x, start_y + 70, button_width, button_height)
+            hard_rect = (button_x, start_y + 140, button_width, button_height)
+            mouse_pos = pygame.mouse.get_pos()
+            is_easy_hovered = check_button_click(mouse_pos[0], mouse_pos[1], easy_rect)
+            is_medium_hovered = check_button_click(mouse_pos[0], mouse_pos[1], medium_rect)
+            is_hard_hovered = check_button_click(mouse_pos[0], mouse_pos[1], hard_rect)
+            draw_cyberpunk_button(window, easy_rect, "EASY [5x5]", button_font, is_easy_hovered, 'green')
+            draw_cyberpunk_button(window, medium_rect, "MEDIUM [10x10]", button_font, is_medium_hovered, 'yellow')
+            draw_cyberpunk_button(window, hard_rect, "HARD [20x20]", button_font, is_hard_hovered, 'red')
         elif grid and game_state in ['bomb_placement', 'player_turn']:
             # Calculate layout: grid on left, chat on right, prompts above grid
             grid_pixel_width = GRID_WIDTH * CELL_SIZE
@@ -1060,14 +1199,14 @@ def run_game():
                 remaining_time = max(0, timer_duration - elapsed_time)
                 remaining_attempts = max_attempts - attempts_used
                 
-                # Timer text
-                timer_text = f"Time: {int(remaining_time)}s"
-                timer_color = RED if remaining_time < 10 else BLACK
+                # Timer text (cyberpunk styling)
+                timer_text = f"TIME: {int(remaining_time)}s"
+                timer_color = RED_500 if remaining_time < 10 else CYAN_400
                 timer_surf = prompt_font.render(timer_text, True, timer_color)
                 
-                # Attempts text (more intuitive format)
-                attempts_text = f"Attempts left: {remaining_attempts}"
-                attempts_color = RED if remaining_attempts <= 1 else BLACK
+                # Attempts text (more intuitive format, cyberpunk styling)
+                attempts_text = f"ATTEMPTS: {remaining_attempts}"
+                attempts_color = RED_500 if remaining_attempts <= 1 else CYAN_400
                 attempts_surf = prompt_font.render(attempts_text, True, attempts_color)
                 
                 # Position them side by side, centered above grid
@@ -1077,7 +1216,8 @@ def run_game():
                 window.blit(timer_surf, (start_x, grid_y_offset - 80))
                 window.blit(attempts_surf, (start_x + timer_surf.get_width() + 50, grid_y_offset - 80))
             
-            prompt_surf = prompt_font.render(prompt_text, True, BLACK)
+            # Draw prompt with cyberpunk styling
+            prompt_surf = prompt_font.render(f">> {prompt_text.upper()}", True, CYAN_300)
             prompt_x = grid_x_offset + (grid_pixel_width - prompt_surf.get_width()) // 2
             window.blit(prompt_surf, (prompt_x, grid_y_offset - 45))
             

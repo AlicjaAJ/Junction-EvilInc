@@ -754,6 +754,8 @@ def run_game():
     mission_data = None  # Dict with player_item and ai_item
     story_loading = False
     story_error = None
+    story_stream_pos = 0  # Current character position for streaming effect
+    story_stream_start_time = None  # When streaming started
     # Chat interface variables
     chat_input = ""  # Current chat message being typed
     chat_input_active = False  # Whether chat input is focused
@@ -912,6 +914,8 @@ def run_game():
                             ending_story = None
                             mission_data = None
                             story_error = None
+                            story_stream_pos = 0  # Reset streaming position
+                            story_stream_start_time = None  # Reset streaming timer
                             window = pygame.display.set_mode((STORY_WIDTH, STORY_HEIGHT), pygame.RESIZABLE)
                             current_width = STORY_WIDTH
                             current_height = STORY_HEIGHT
@@ -960,6 +964,8 @@ def run_game():
                                 if grid.victor:
                                     # Player won! Trigger ending story
                                     game_state = 'loading_ending'
+                                    story_stream_pos = 0  # Reset streaming for ending story
+                                    story_stream_start_time = None
                                     window = pygame.display.set_mode((STORY_WIDTH, STORY_HEIGHT), pygame.RESIZABLE)
                                     current_width = STORY_WIDTH
                                     current_height = STORY_HEIGHT
@@ -983,6 +989,8 @@ def run_game():
                                     # Out of attempts! Player loses
                                     grid.victor = 'AI'
                                     game_state = 'loading_ending'
+                                    story_stream_pos = 0  # Reset streaming for ending story
+                                    story_stream_start_time = None
                                     window = pygame.display.set_mode((STORY_WIDTH, STORY_HEIGHT), pygame.RESIZABLE)
                                     current_width = STORY_WIDTH
                                     current_height = STORY_HEIGHT
@@ -1018,6 +1026,8 @@ def run_game():
                 # Time's up! Player loses
                 grid.victor = 'AI'
                 game_state = 'loading_ending'
+                story_stream_pos = 0  # Reset streaming for ending story
+                story_stream_start_time = None
                 window = pygame.display.set_mode((STORY_WIDTH, STORY_HEIGHT), pygame.RESIZABLE)
                 current_width = STORY_WIDTH
                 current_height = STORY_HEIGHT
@@ -1057,6 +1067,8 @@ def run_game():
             if grid.victor:
                 # Game ended - generate ending story
                 game_state = 'loading_ending'
+                story_stream_pos = 0  # Reset streaming for ending story
+                story_stream_start_time = None
                 window = pygame.display.set_mode((STORY_WIDTH, STORY_HEIGHT), pygame.RESIZABLE)
                 current_width = STORY_WIDTH
                 current_height = STORY_HEIGHT
@@ -1093,23 +1105,49 @@ def run_game():
             text_rect2 = spinner_text.get_rect(center=(current_width // 2, current_height // 2 + 20))
             window.blit(spinner_text, text_rect2)
         elif game_state == 'story_opening':
-            # Display opening story
+            # Display opening story with streaming effect
             if story_error:
                 error_text = prompt_font.render(">> ERROR", True, RED_500)
                 window.blit(error_text, (50, 50))
                 error_msg = story_font.render(f"{story_error}", True, RED_500)
                 window.blit(error_msg, (50, 100))
             elif opening_story:
+                # Initialize streaming when story first appears
+                if story_stream_start_time is None:
+                    story_stream_start_time = pygame.time.get_ticks()
+                    story_stream_pos = 0
+                
+                # Update streaming position (characters per second)
+                chars_per_second = 30  # Adjust speed here (higher = faster)
+                elapsed_ms = pygame.time.get_ticks() - story_stream_start_time
+                story_stream_pos = min(len(opening_story), int(chars_per_second * elapsed_ms / 1000))
+                
                 title_text = prompt_font.render(">> MISSION_BRIEFING", True, CYAN_400)
                 title_rect = title_text.get_rect(center=(current_width // 2, 40))
                 window.blit(title_text, title_rect)
+                
+                # Get only the visible portion of the story (streaming effect)
+                visible_story = opening_story[:story_stream_pos]
+                
                 # Wrap and display story text dynamically based on window width
-                wrapped_lines = wrap_text(opening_story, story_font, current_width - 100)
+                wrapped_lines = wrap_text(visible_story, story_font, current_width - 100)
                 y_offset = 90
                 for line in wrapped_lines:
                     line_surface = story_font.render(line, True, WHITE)
                     window.blit(line_surface, (50, y_offset))
                     y_offset += 30
+                
+                # Show blinking cursor at the end if still streaming
+                if story_stream_pos < len(opening_story):
+                    cursor_x = 50
+                    if wrapped_lines:
+                        last_line = wrapped_lines[-1]
+                        last_line_surf = story_font.render(last_line, True, WHITE)
+                        cursor_x = 50 + last_line_surf.get_width()
+                    cursor_surf = story_font.render("_", True, CYAN_400)
+                    # Blink cursor (every 500ms)
+                    if (pygame.time.get_ticks() // 500) % 2 == 0:
+                        window.blit(cursor_surf, (cursor_x, y_offset - 30))
                 # Begin mission button with cyberpunk styling
                 begin_rect = (current_width // 2 - 100, current_height - 80, 200, 50)
                 mouse_pos = pygame.mouse.get_pos()
@@ -1124,25 +1162,51 @@ def run_game():
             text_rect2 = spinner_text.get_rect(center=(current_width // 2, current_height // 2 + 20))
             window.blit(spinner_text, text_rect2)
         elif game_state == 'story_ending':
-            # Display ending story
+            # Display ending story with streaming effect
             if story_error:
                 error_text = prompt_font.render(">> ERROR", True, RED_500)
                 window.blit(error_text, (50, 50))
                 error_msg = story_font.render(f"{story_error}", True, RED_500)
                 window.blit(error_msg, (50, 100))
             elif ending_story:
+                # Initialize streaming when ending story first appears
+                if story_stream_start_time is None:
+                    story_stream_start_time = pygame.time.get_ticks()
+                    story_stream_pos = 0
+                
+                # Update streaming position (characters per second)
+                chars_per_second = 30  # Same speed as opening story
+                elapsed_ms = pygame.time.get_ticks() - story_stream_start_time
+                story_stream_pos = min(len(ending_story), int(chars_per_second * elapsed_ms / 1000))
+                
                 result = ">> MISSION_SUCCESS" if grid.victor == 'Player' else ">> MISSION_FAILED"
                 color = GREEN_500 if grid.victor == 'Player' else RED_500
                 title_text = prompt_font.render(result, True, color)
                 title_rect = title_text.get_rect(center=(current_width // 2, 40))
                 window.blit(title_text, title_rect)
+                
+                # Get only the visible portion of the story (streaming effect)
+                visible_story = ending_story[:story_stream_pos]
+                
                 # Wrap and display story text dynamically based on window width
-                wrapped_lines = wrap_text(ending_story, story_font, current_width - 100)
+                wrapped_lines = wrap_text(visible_story, story_font, current_width - 100)
                 y_offset = 90
                 for line in wrapped_lines:
                     line_surface = story_font.render(line, True, WHITE)
                     window.blit(line_surface, (50, y_offset))
                     y_offset += 30
+                
+                # Show blinking cursor at the end if still streaming
+                if story_stream_pos < len(ending_story):
+                    cursor_x = 50
+                    if wrapped_lines:
+                        last_line = wrapped_lines[-1]
+                        last_line_surf = story_font.render(last_line, True, WHITE)
+                        cursor_x = 50 + last_line_surf.get_width()
+                    cursor_surf = story_font.render("_", True, CYAN_400)
+                    # Blink cursor (every 500ms)
+                    if (pygame.time.get_ticks() // 500) % 2 == 0:
+                        window.blit(cursor_surf, (cursor_x, y_offset - 30))
                 # New Mission and Quit buttons with cyberpunk styling
                 new_mission_rect = (current_width // 2 - 210, current_height - 80, 180, 50)
                 quit_rect = (current_width // 2 + 30, current_height - 80, 180, 50)

@@ -1,5 +1,5 @@
 """
-Bomb Hunt Game - Main Game Module
+Queen of hearts - Main Game Module
 
 A turn-based strategy game where a player competes against an AI to find
 each other's hidden bombs. Features include:
@@ -603,9 +603,8 @@ def draw_chat_sidebar(surface, x, y, width, height, opponent_ai, chat_input, cha
         surface.blit(glow_surf, (x - i, y - i))
     pygame.draw.rect(surface, CYAN_600, panel_rect, 6)
     
-    # Title with message count
-    msg_count = len(opponent_ai.get_chat_history())
-    title_text = f">> AI_OPPONENT_CHAT ({msg_count // 2})"  # Divide by 2 for msg pairs
+    # Title (without message count)
+    title_text = ">> AI_OPPONENT_CHAT"
     title = font.render(title_text, True, CYAN_300)
     surface.blit(title, (x + 10, y + 10))
     
@@ -728,7 +727,7 @@ def run_game():
     INITIAL_WIDTH = STORY_WIDTH
     INITIAL_HEIGHT = STORY_HEIGHT
     window = pygame.display.set_mode((INITIAL_WIDTH, INITIAL_HEIGHT), pygame.RESIZABLE)
-    pygame.display.set_caption("Bomb Hunt Game")
+    pygame.display.set_caption("Queen of hearts")
     # Track current window dimensions
     current_width = INITIAL_WIDTH
     current_height = INITIAL_HEIGHT

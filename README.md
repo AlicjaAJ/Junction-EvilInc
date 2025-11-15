@@ -15,7 +15,7 @@ Watch out — because if you guess wrong, **you lose everything**.
 
 Yet, remember: You shape the path to victory. Do you choose **Dialog**, or **Combat**?
 
-## THE DUEL OF MINDS
+## The Duel of Minds
 
 **What it is:**  
 Dialogue under intense time pressure.
@@ -24,9 +24,7 @@ Dialogue under intense time pressure.
 Defeat the AI in the mental game of two lie masters, accounting for the AI's constant evolution.  
 The more you lie and the more you believe, the clearer your psychological profile becomes, providing the AI with the information on how to manipulate you into loss.
 
----
-
-## THE DUEL OF BODIES
+## The Duel Of Bodies
 
 **What it is:**  
 Grid-based tactical combat, building and evolving your **Human Cell** with every strategic step.
@@ -54,15 +52,29 @@ This creates **strategic tension**:
 - The next round generates a completely new challenge and different story pieces.
 - You **can** skip the lore — but in that case, you'll never know its unique ending...
 
----
-
-## THE TAILORED ENDING
+## The Tailored Ending
 
 This is our final surprise: **your ending.**
 
 Masterfully tailored to your profile, each conclusion is individual and unique to your game. It doesn't depend on your final guess, but **on who you are...
 
-**Are you ready to face an opponent that knows you **better than you know yourself?**
+**Are you ready to face an opponent that knows you **better than you know yourself? Are you ready to join the Utopia?**
 
 ---
+
+## TECHNICAL IMPLEMENTATION
+
+---
+
+## DEMO FEATURES
+
+This project features a DEMO of the revolutionary video game, The Queen of Hearts, addressing the challenge posed by Supercell during the 2025 Junction: Utopia and Dystopia.
+
+The demo provides a focused look at the following features of the game:
+- 7 rounds game: Experience the increasing difficulty across all 7 levels, including grid size increases and increasing number of available LLM roles, staring from simplest        always Lies/ always Tells the Truths/ does 50:50.
+- Psychological Dialogue: Engage in the core mechanic where your dialogue is constantly scored by the ML system to create tailored LLM models which constantly try to trick you     into loosing.
+- Dynamic Weakness System: Witness the AI's evolution as it learns about the player's weaknesses and develops one "evolution" to cover its own weakness for the next round. (is it good ?????)
+- Engaging Stories: Collect storytelling Easter Eggs hidden as objects on the grid in each of the 7 levels, piecing together the unique narrative.
+- Tailored Ending: Receive your individual, LLM-generated ending, which is based not on your choices, but on the ML interpretation of your core profile (Lies and Beliefs).
+
 

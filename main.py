@@ -394,7 +394,7 @@ def wrap_text(text, font, max_width):
 def draw_chat_sidebar(surface, x, y, width, height, opponent_ai, chat_input, chat_input_active,
                       ai_response_loading, font, small_font):
     """
-    Draw the chat interface sidebar.
+    Draw the chat interface sidebar with proper text wrapping and scrolling.
 
     Args:
         surface: Pygame surface to draw on
@@ -413,38 +413,81 @@ def draw_chat_sidebar(surface, x, y, width, height, opponent_ai, chat_input, cha
     pygame.draw.rect(surface, (240, 240, 245), (x, y, width, height))
     pygame.draw.rect(surface, (100, 100, 120), (x, y, width, height), 2)
     
-    # Title
-    title = font.render("AI Opponent Chat", True, (0, 0, 0))
+    # Title with message count
+    msg_count = len(opponent_ai.get_chat_history())
+    title_text = f"AI Opponent Chat ({msg_count // 2})"  # Divide by 2 for msg pairs
+    title = font.render(title_text, True, (0, 0, 0))
     surface.blit(title, (x + 10, y + 10))
     
     # Chat history area
+    chat_area_x = x + 5
     chat_area_y = y + 45
+    chat_area_width = width - 10
     chat_area_height = height - 95
-    pygame.draw.rect(surface, (255, 255, 255), (x + 5, chat_area_y, width - 10, chat_area_height))
-    pygame.draw.rect(surface, (180, 180, 180), (x + 5, chat_area_y, width - 10, chat_area_height), 1)
+    pygame.draw.rect(surface, (255, 255, 255), (chat_area_x, chat_area_y, chat_area_width, chat_area_height))
+    pygame.draw.rect(surface, (180, 180, 180), (chat_area_x, chat_area_y, chat_area_width, chat_area_height), 1)
     
-    # Display chat history
+    # Calculate all wrapped lines first to enable auto-scroll
     chat_history = opponent_ai.get_chat_history()
-    y_offset = chat_area_y + 5
-    line_height = 22
+    all_lines = []
+    line_height = 20
+    text_margin = 10
+    available_width = chat_area_width - 2 * text_margin
     
-    for sender, message in chat_history[-10:]:  # Show last 10 messages
-        color = (50, 100, 200) if sender == 'player' else (200, 50, 50)
+    # Show help text if no messages yet
+    if not chat_history:
+        help_lines = [
+            "Click the input box below to chat",
+            "with your AI opponent!",
+            "",
+            "Ask about strategy, request hints,",
+            "or engage in conversation."
+        ]
+        for help_line in help_lines:
+            all_lines.append((help_line, (120, 120, 120), None))
+    
+    for sender, message in chat_history:
+        color = (20, 80, 180) if sender == 'player' else (180, 40, 40)
+        bg_color = (230, 240, 255) if sender == 'player' else (255, 240, 230)
         prefix = "You: " if sender == 'player' else "AI: "
         
-        # Wrap message
-        wrapped = wrap_text(prefix + message, small_font, width - 30)
-        for line in wrapped:
-            if y_offset + line_height > chat_area_y + chat_area_height - 5:
-                break
+        # Wrap message with proper width
+        wrapped = wrap_text(prefix + message, small_font, available_width)
+        for i, line in enumerate(wrapped):
+            all_lines.append((line, color, bg_color if i == 0 else None))
+        # Add small gap between messages
+        all_lines.append(("", (0, 0, 0), None))  # Empty line for spacing
+    
+    # Auto-scroll: show the most recent messages that fit
+    total_height_needed = len(all_lines) * line_height
+    start_line = max(0, len(all_lines) - int(chat_area_height / line_height))
+    
+    # Draw visible lines with background highlighting
+    y_offset = chat_area_y + 5
+    for line_data in all_lines[start_line:]:
+        if y_offset + line_height > chat_area_y + chat_area_height - 5:
+            break
+        line, color, bg_color = line_data
+        if line:  # Skip empty lines
+            # Draw background for first line of each message
+            if bg_color:
+                bg_rect = pygame.Rect(chat_area_x + 5, y_offset - 2, 
+                                     chat_area_width - 10, line_height)
+                pygame.draw.rect(surface, bg_color, bg_rect)
+            
             text_surf = small_font.render(line, True, color)
-            surface.blit(text_surf, (x + 10, y_offset))
-            y_offset += line_height
+            # Clip text if it's still too long
+            if text_surf.get_width() > available_width:
+                # Truncate with ellipsis
+                truncated = line[:int(len(line) * available_width / text_surf.get_width()) - 3] + "..."
+                text_surf = small_font.render(truncated, True, color)
+            surface.blit(text_surf, (chat_area_x + text_margin, y_offset))
+        y_offset += line_height
     
     # Loading indicator
     if ai_response_loading:
         loading_text = small_font.render("AI is typing...", True, (150, 150, 150))
-        surface.blit(loading_text, (x + 10, y_offset))
+        surface.blit(loading_text, (chat_area_x + text_margin, y_offset))
     
     # Input box
     input_y = y + height - 45
@@ -452,9 +495,14 @@ def draw_chat_sidebar(surface, x, y, width, height, opponent_ai, chat_input, cha
     pygame.draw.rect(surface, (255, 255, 255), (x + 5, input_y, width - 10, 35))
     pygame.draw.rect(surface, input_box_color, (x + 5, input_y, width - 10, 35), 2)
     
-    # Input text or placeholder
+    # Input text with wrapping/truncation
     if chat_input:
-        input_surf = small_font.render(chat_input, True, (0, 0, 0))
+        # Wrap input text if too long
+        input_width = width - 30
+        wrapped_input = wrap_text(chat_input, small_font, input_width)
+        # Show only the last line if multiple lines (most recent typing)
+        display_text = wrapped_input[-1] if wrapped_input else chat_input
+        input_surf = small_font.render(display_text, True, (0, 0, 0))
     else:
         input_surf = small_font.render("Type your message...", True, (150, 150, 150))
     surface.blit(input_surf, (x + 10, input_y + 8))
@@ -547,20 +595,30 @@ def run_game():
             # Handle keyboard input for chat
             if event.type == pygame.KEYDOWN:
                 if chat_input_active and game_state in ['bomb_placement', 'player_turn']:
-                    if event.key == pygame.K_RETURN and chat_input.strip():
-                        # Submit chat message to opponent AI
+                    if event.key == pygame.K_RETURN and chat_input.strip() and not ai_response_loading:
+                        # Submit chat message to opponent AI (only if not already loading)
                         user_message = chat_input.strip()
                         chat_input = ""
                         # Generate AI response in background thread
                         def get_ai_response():
                             nonlocal ai_response_loading
                             ai_response_loading = True
-                            opponent_ai.generate_response(user_message)
-                            ai_response_loading = False
+                            try:
+                                opponent_ai.generate_response(user_message)
+                            except Exception as e:
+                                # Add error message to chat on failure
+                                opponent_ai.chat_history.append(("player", user_message))
+                                opponent_ai.chat_history.append(("ai", f"[Error: {str(e)}]"))
+                            finally:
+                                ai_response_loading = False
                         threading.Thread(target=get_ai_response, daemon=True).start()
                     elif event.key == pygame.K_BACKSPACE:
                         chat_input = chat_input[:-1]
-                    elif len(chat_input) < 100:
+                    elif event.key == pygame.K_ESCAPE:
+                        # Deactivate chat input
+                        chat_input_active = False
+                    elif len(chat_input) < 200 and event.unicode.isprintable():
+                        # Increased limit and only allow printable characters
                         chat_input += event.unicode
             # Handle mouse clicks
             if event.type == pygame.MOUSEBUTTONDOWN:

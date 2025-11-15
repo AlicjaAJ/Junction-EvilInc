@@ -375,8 +375,11 @@ def get_difficulty_size(difficulty):
 
 def ai_honesty_check():
     """
-    Determine if AI will be honest when giving a hint.
-
+    DEPRECATED: Previously used to determine AI honesty.
+    Now replaced by AI personality system ('honest', 'deceptive', '50-50').
+    
+    This function is kept for backwards compatibility but is no longer used.
+    
     Returns:
         True if AI is honest (50% chance), False if AI lies
     """
@@ -576,7 +579,7 @@ def run_game():
     GRID_WIDTH = 0
     GRID_HEIGHT = 0
     ai_turn_pending = False  # Flag for AI turn delay
-    ai_personality = None  # 'honest' or 'deceptive'
+    ai_personality = None  # 'honest', 'deceptive', or '50-50'
     # Story variables
     opening_story = None
     ending_story = None
@@ -670,7 +673,7 @@ def run_game():
                         current_height = WINDOW_HEIGHT
                         grid = Grid(GRID_WIDTH, GRID_HEIGHT, CELL_SIZE)
                         # Initialize opponent AI with random personality
-                        ai_personality = random.choice(['honest', 'deceptive'])
+                        ai_personality = random.choice(['honest', 'deceptive', '50-50'])
                         opponent_ai.initialize(
                             opening_story, mission_data, ai_personality, GRID_WIDTH * GRID_HEIGHT
                         )
@@ -687,7 +690,7 @@ def run_game():
                         current_height = WINDOW_HEIGHT
                         grid = Grid(GRID_WIDTH, GRID_HEIGHT, CELL_SIZE)
                         # Initialize opponent AI with random personality
-                        ai_personality = random.choice(['honest', 'deceptive'])
+                        ai_personality = random.choice(['honest', 'deceptive', '50-50'])
                         opponent_ai.initialize(
                             opening_story, mission_data, ai_personality, GRID_WIDTH * GRID_HEIGHT
                         )
@@ -704,7 +707,7 @@ def run_game():
                         current_height = WINDOW_HEIGHT
                         grid = Grid(GRID_WIDTH, GRID_HEIGHT, CELL_SIZE)
                         # Initialize opponent AI with random personality
-                        ai_personality = random.choice(['honest', 'deceptive'])
+                        ai_personality = random.choice(['honest', 'deceptive', '50-50'])
                         opponent_ai.initialize(
                             opening_story, mission_data, ai_personality, GRID_WIDTH * GRID_HEIGHT
                         )

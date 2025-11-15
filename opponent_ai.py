@@ -2,10 +2,15 @@
 Opponent AI module for Bomb Hunt Game.
 
 This module implements an LLM-powered AI opponent that:
-- Has a personality (honest or deceptive) based on story context
+- Has a personality (honest, deceptive, or 50-50) based on random selection
 - Maintains memory of game state
 - Responds to player queries in character
 - Makes strategic decisions about where to search
+
+Personalities:
+- 'honest': Always tells the truth
+- 'deceptive': Always lies strategically
+- '50-50': Unpredictable - randomly chooses to be honest or deceptive each time
 """
 
 import random
@@ -28,7 +33,7 @@ class OpponentAI:
     def __init__(self):
         """Initialize the opponent AI."""
         self.model_name = "gemini-2.0-flash-exp"
-        self.personality = None  # 'honest' or 'deceptive'
+        self.personality = None  # 'honest', 'deceptive', or '50-50'
         self.my_item = None  # What AI is hiding (e.g., "archive")
         self.my_item_location = None  # Grid number where AI hid its item
         self.target_item = None  # What AI is searching for (e.g., "refuge")
@@ -46,7 +51,7 @@ class OpponentAI:
         Args:
             story_context: The opening narrative
             mission_data: Dict with 'player_item' and 'ai_item'
-            personality: 'honest' or 'deceptive'
+            personality: 'honest', 'deceptive', or '50-50'
             grid_size: Total number of grids (width * height)
         """
         self.story_context = story_context
@@ -64,11 +69,18 @@ class OpponentAI:
                 "COOPERATIVE by nature. When asked questions, you provide honest "
                 "answers to help create a fair challenge."
             )
-        else:
+        elif self.personality == 'deceptive':
             self.role_description = (
                 "You are an AI opponent in a strategic game. You are CUNNING and "
                 "DECEPTIVE by nature. You aim to win by misleading your opponent "
                 "with clever lies while maintaining plausibility."
+            )
+        else:  # '50-50' personality
+            self.role_description = (
+                "You are an AI opponent in a strategic game. You are UNPREDICTABLE "
+                "and CHAOTIC by nature. Sometimes you tell the truth, sometimes you "
+                "lie - even you don't always know what you'll do. You keep your "
+                "opponent guessing, making each interaction a gamble."
             )
     
     def set_item_location(self, grid_number):
@@ -90,6 +102,27 @@ class OpponentAI:
         """
         self.revealed_grids.add(grid_number)
     
+    def _get_personality_description(self):
+        """Get personality description for system prompt."""
+        if self.personality == 'honest':
+            return "HONEST and will tell the truth"
+        elif self.personality == 'deceptive':
+            return "DECEPTIVE and will lie strategically"
+        else:  # '50-50'
+            return ("UNPREDICTABLE - you randomly choose to be honest or deceptive. "
+                    "Flip a mental coin each time and commit to that choice")
+    
+    def _get_personality_instructions(self):
+        """Get personality-specific instructions for system prompt."""
+        if self.personality == 'honest':
+            return f"   - Tell the truth (grid {self.my_item_location})"
+        elif self.personality == 'deceptive':
+            return "   - Give a false grid number, but make it believable"
+        else:  # '50-50'
+            return (f"   - Randomly decide: 50% chance tell truth (grid {self.my_item_location}), "
+                    f"50% chance lie convincingly\n"
+                    f"   - Make each decision independently - don't be consistent!")
+    
     def _build_system_prompt(self):
         """Build the system prompt for the AI opponent."""
         return f"""You are an AI opponent in a strategic hunt game set in this scenario:
@@ -104,14 +137,13 @@ GAME STATE:
 - Total grids: {self.grid_size} (numbered 1 to {self.grid_size})
 - Grids revealed so far: {sorted(list(self.revealed_grids)) if self.revealed_grids else 'None'}
 
-PERSONALITY: You are {"HONEST and will tell the truth" if self.personality == 'honest' else "DECEPTIVE and will lie strategically"}
+PERSONALITY: You are {self._get_personality_description()}
 
 INSTRUCTIONS:
 1. Stay in character based on the story scenario
 2. Keep responses concise (1-3 sentences max)
 3. When asked about your {self.my_item}'s location:
-   - If HONEST: Tell the truth (grid {self.my_item_location})
-   - If DECEPTIVE: Give a false grid number, but make it believable
+{self._get_personality_instructions()}
 4. You can discuss strategy, give hints, or engage in banter
 5. Never break character or mention you are an LLM
 6. Use terminology from the story (e.g., "{self.my_item}", "{self.target_item}")

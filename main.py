@@ -12,21 +12,36 @@ CELL_COLOR = (180, 220, 255)
 
 class Grid:
 
+    def run_status(self):
+        return self.running
+
     def __init__(self, width, height, cell_size):
 
         self.width = width
         self.height = height
         self.cell_size = cell_size
         self.cells = [[Cell() for _ in range(height)] for _ in range(width)]
+        self.running = True
 
 
-    def handle_click(self, x, y):
+
+    def handle_click(self, x, y,player_bomb_insertion):
 
         col = x // self.cell_size
         row = y // self.cell_size
 
-        self.cells[col][row].revealed = True
+        if player_bomb_insertion:
+            self.cells[col][row].add_item(('P','B'))
+            return False
 
+
+        self.cells[col][row].revealed = True
+        return False
+
+
+    def victory(self,victor):
+        self.running=False
+        print(victor)
 
     def draw(self, surface):
 
@@ -41,10 +56,14 @@ class Grid:
                 if cell.revealed:
 
                     pygame.draw.rect(surface, CELL_COLOR, rect)
-                    if cell.item:
+                    if cell.item_type:
                         font = pygame.font.SysFont(None, 24)
-                        text = font.render(cell.item, True, BLACK)
+                        text = font.render(cell.item_type[0], True, BLACK)
                         surface.blit(text, (x * self.cell_size + 5, y * self.cell_size + 5))
+                        if cell.item_type[0]=='P':
+                            self.victory('Player')
+
+
 
 
 def run_game():
@@ -66,18 +85,19 @@ def run_game():
     pygame.display.set_caption("Simple Grid Game")
     grid = Grid(GRID_WIDTH, GRID_HEIGHT, CELL_SIZE)
 
+    player_bomb_insertion=True
 
-    running = True
 
-    while running:
+
+    while grid.run_status():
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                running = False
+                grid.running = False
             if event.type == pygame.MOUSEBUTTONDOWN:
                 x, y = pygame.mouse.get_pos()
                 if x < GRID_WIDTH * CELL_SIZE:
-                    grid.handle_click(x, y)
+                    player_bomb_insertion=grid.handle_click(x, y,player_bomb_insertion)
 
 
         window.fill(WHITE)

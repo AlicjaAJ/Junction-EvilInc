@@ -4,16 +4,22 @@
 A turn-based strategy game with LLM-generated narratives where you compete against an AI opponent.
 
 ## Prerequisites
-- Python 3.8 or higher
+- Python 3.8 to 3.13
 - Gemini API key from Google AI Studio
 
 ## Installation
 
 ### 1. Set up virtual environment
 ```bash
-cd /Users/mac/Documents/Dev/Junction-EvilInc
-python3 -m venv venv
-source venv/bin/activate
+cd Junction-EvilInc   # change directory to project folder
+
+# Create virtual environment
+python3 -m venv venv  # or: python -m venv venv
+
+# Activate virtual environment
+venv\Scripts\activate        # Windows
+source venv/bin/activate     # macOS / Linux
+
 ```
 
 ### 2. Install dependencies
@@ -63,8 +69,13 @@ GEMINI_MODEL=gemini-2.0-flash-exp
 ## Running the Game
 
 ```bash
-source venv/bin/activate  # If not already activated
-python3 main.py
+
+# Activate virtual environment if not already activated
+venv\Scripts\activate        # Windows
+source venv/bin/activate     # macOS / Linux
+
+python3 main.py               # or: python main.py
+
 ```
 
 ## Game Flow

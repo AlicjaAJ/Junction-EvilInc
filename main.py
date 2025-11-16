@@ -608,11 +608,22 @@ def draw_chat_sidebar(surface, x, y, width, height, opponent_ai, chat_input, cha
     title = font.render(title_text, True, CYAN_300)
     surface.blit(title, (x + 10, y + 10))
     
-    # Chat history area
+    # Calculate input box height dynamically based on text wrapping
+    input_width = width - 30
+    if chat_input:
+        wrapped_input_lines = wrap_text(chat_input, small_font, input_width)
+        num_input_lines = len(wrapped_input_lines)
+        # Dynamic height: min 35px, max 200px, based on number of lines
+        input_box_height = min(max(35, num_input_lines * 20 + 15), 200)
+    else:
+        wrapped_input_lines = []
+        input_box_height = 35  # Default height
+    
+    # Chat history area (adjust height to account for dynamic input box)
     chat_area_x = x + 5
     chat_area_y = y + 45
     chat_area_width = width - 10
-    chat_area_height = height - 95
+    chat_area_height = height - (95 + (input_box_height - 35))  # Adjust for input box expansion
     pygame.draw.rect(surface, BLACK, (chat_area_x, chat_area_y, chat_area_width, chat_area_height))
     pygame.draw.rect(surface, CYAN_700, (chat_area_x, chat_area_y, chat_area_width, chat_area_height), 3)
     
@@ -677,23 +688,36 @@ def draw_chat_sidebar(surface, x, y, width, height, opponent_ai, chat_input, cha
         loading_text = small_font.render(">> AI_PROCESSING...", True, CYAN_400)
         surface.blit(loading_text, (chat_area_x + text_margin, y_offset))
     
-    # Input box (cyberpunk styling)
-    input_y = y + height - 45
+    # Input box (cyberpunk styling) - dynamically sized
+    input_y = y + height - (45 + (input_box_height - 35))  # Adjust position based on height
     input_box_color = CYAN_500 if chat_input_active else CYAN_700
-    pygame.draw.rect(surface, BLACK, (x + 5, input_y, width - 10, 35))
-    pygame.draw.rect(surface, input_box_color, (x + 5, input_y, width - 10, 35), 4)
+    pygame.draw.rect(surface, BLACK, (x + 5, input_y, width - 10, input_box_height))
+    pygame.draw.rect(surface, input_box_color, (x + 5, input_y, width - 10, input_box_height), 4)
     
-    # Input text with wrapping/truncation (cyberpunk styling)
+    # Input text with intelligent wrapping - show all lines
     if chat_input:
-        # Wrap input text if too long
-        input_width = width - 30
-        wrapped_input = wrap_text(chat_input, small_font, input_width)
-        # Show only the last line if multiple lines (most recent typing)
-        display_text = wrapped_input[-1] if wrapped_input else chat_input
-        input_surf = small_font.render(display_text, True, CYAN_300)
+        # Display all wrapped lines
+        line_height = 20
+        text_start_y = input_y + 8
+        for i, line in enumerate(wrapped_input_lines):
+            input_surf = small_font.render(line, True, CYAN_300)
+            surface.blit(input_surf, (x + 10, text_start_y + i * line_height))
+        
+        # Show blinking cursor at the end of the last line
+        if chat_input_active:
+            cursor_surf = small_font.render("_", True, CYAN_400)
+            if wrapped_input_lines:
+                last_line = wrapped_input_lines[-1]
+                last_line_surf = small_font.render(last_line, True, CYAN_300)
+                cursor_x = x + 10 + last_line_surf.get_width()
+            else:
+                cursor_x = x + 10
+            # Blink cursor (every 500ms)
+            if (pygame.time.get_ticks() // 500) % 2 == 0:
+                surface.blit(cursor_surf, (cursor_x, text_start_y + (len(wrapped_input_lines) - 1) * line_height))
     else:
-        input_surf = small_font.render(">> TYPE_MESSAGE...", True, CYAN_700)
-    surface.blit(input_surf, (x + 10, input_y + 8))
+        placeholder_surf = small_font.render(">> TYPE_MESSAGE...", True, CYAN_700)
+        surface.blit(placeholder_surf, (x + 10, input_y + 8))
 
 
 def run_game():

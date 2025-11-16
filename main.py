@@ -420,7 +420,7 @@ def get_difficulty_size(difficulty):
     elif difficulty == 'medium':
         return base_size * 2  # 10x10
     elif difficulty == 'hard':
-        return base_size * 4  # 20x20
+        return base_size * 3  # 15x15
     return base_size
 
 
@@ -1452,7 +1452,7 @@ def run_game():
             is_hard_hovered = check_button_click(mouse_pos[0], mouse_pos[1], hard_rect)
             draw_cyberpunk_button(window, easy_rect, "EASY [5x5]", button_font, is_easy_hovered, 'green')
             draw_cyberpunk_button(window, medium_rect, "MEDIUM [10x10]", button_font, is_medium_hovered, 'yellow')
-            draw_cyberpunk_button(window, hard_rect, "HARD [20x20]", button_font, is_hard_hovered, 'red')
+            draw_cyberpunk_button(window, hard_rect, "HARD [15x15]", button_font, is_hard_hovered, 'red')
         elif grid and game_state in ['bomb_placement', 'player_turn']:
             # Calculate layout: grid on left, chat on right, prompts above grid
             grid_pixel_width = GRID_WIDTH * CELL_SIZE

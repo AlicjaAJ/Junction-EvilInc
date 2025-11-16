@@ -29,6 +29,7 @@ import threading
 from cell import Cell
 from story_generator import StoryGenerator
 from opponent_ai import OpponentAI
+from image_generator import generate_mission_image, generate_mission_image_simple
 
 
 # Cyberpunk CRT Color Scheme (inspired by design reference)
@@ -780,24 +781,90 @@ def run_game():
     story_error = None
     story_stream_pos = 0  # Current character position for streaming effect
     story_stream_start_time = None  # When streaming started
+    # Image variables
+    opening_image = None  # PIL Image for opening story
+    ending_image = None  # PIL Image for ending story
+    opening_image_surface = None  # Pygame surface for opening image
+    ending_image_surface = None  # Pygame surface for ending image
+    image_loading = False  # Flag for image generation
     # Chat interface variables
     chat_input = ""  # Current chat message being typed
     chat_input_active = False  # Whether chat input is focused
     chat_scroll_offset = 0  # Scroll position for chat history
     ai_response_loading = False  # Flag for when AI is generating response
+    begin_button_rect = None  # Tracks mission briefing button rect
     clock = pygame.time.Clock()
     running = True
+
+    # Helper function to convert PIL Image to Pygame surface
+    def pil_to_surface(pil_image, max_width=800, max_height=400):
+        """Convert PIL Image to Pygame surface with size constraints."""
+        if pil_image is None:
+            return None
+        # Resize if needed
+        width, height = pil_image.size
+        if width > max_width or height > max_height:
+            ratio = min(max_width / width, max_height / height)
+            new_width = int(width * ratio)
+            new_height = int(height * ratio)
+            pil_image = pil_image.resize((new_width, new_height))
+        # Convert to pygame surface
+        mode = pil_image.mode
+        size = pil_image.size
+        data = pil_image.tobytes()
+        # Use frombytes for newer pygame versions, fallback to fromstring
+        try:
+            return pygame.image.frombytes(data, size, mode)
+        except AttributeError:
+            return pygame.image.fromstring(data, size, mode)
+    
+    def get_default_story():
+        """Return fallback story text and mission data."""
+        fallback_story = (
+            "Signal lost from Gemini relay. Operate offline. Hide your beacon, "
+            "trace the AI's artifact, and survive."
+        )
+        fallback_mission = {
+            "player_item": "signal beacon",
+            "ai_item": "artifact shard",
+        }
+        return fallback_story, fallback_mission
 
     # Start loading opening story in background thread
     def load_opening_story():
         nonlocal opening_story, mission_data, story_loading, story_error, game_state
+        nonlocal opening_image, opening_image_surface, image_loading
         story_loading = True
+        fallback_used = False
         try:
-            opening_story, mission_data = story_gen.generate_opening_story()
+            try:
+                opening_story, mission_data = story_gen.generate_opening_story()
+            except Exception as story_exc:
+                print(f"Error generating opening story: {story_exc}")
+                opening_story, mission_data = get_default_story()
+                fallback_used = True
             game_state = 'story_opening'
+            # Generate image for opening story
+            image_loading = True
+            try:
+                opening_image = generate_mission_image(opening_story, "briefing")
+                if opening_image is None:
+                    opening_image = generate_mission_image_simple(opening_story, "briefing")
+                if opening_image:
+                    opening_image_surface = pil_to_surface(opening_image, 800, 400)
+            except Exception as e:
+                print(f"Error generating opening image: {e}")
+                opening_image = generate_mission_image_simple(opening_story, "briefing")
+                if opening_image:
+                    opening_image_surface = pil_to_surface(opening_image, 800, 400)
+            image_loading = False
         except Exception as e:
             story_error = str(e)
             game_state = 'story_opening'
+        finally:
+            if fallback_used:
+                # Ensure we don't display an error screen when using fallback story
+                story_error = None
         story_loading = False
 
     threading.Thread(target=load_opening_story, daemon=True).start()
@@ -826,9 +893,12 @@ def run_game():
                             try:
                                 opponent_ai.generate_response(user_message)
                             except Exception as e:
-                                # Add error message to chat on failure
+                                # Friendly fallback message (avoid raw JSON/errors in chat)
                                 opponent_ai.chat_history.append(("player", user_message))
-                                opponent_ai.chat_history.append(("ai", f"[Error: {str(e)}]"))
+                                opponent_ai.chat_history.append((
+                                    "ai",
+                                    "The channel is saturated. You'll have to rely on your instincts, operative."
+                                ))
                             finally:
                                 ai_response_loading = False
                         threading.Thread(target=get_ai_response, daemon=True).start()
@@ -845,9 +915,8 @@ def run_game():
                 x, y = pygame.mouse.get_pos()
                 # Story opening screen - begin mission button
                 if game_state == 'story_opening':
-                    if opening_story:
-                        begin_rect = (current_width // 2 - 100, current_height - 80, 200, 50)
-                        if check_button_click(x, y, begin_rect):
+                    if opening_story and begin_button_rect:
+                        if check_button_click(x, y, begin_button_rect):
                             # Keep current window size (don't resize)
                             game_state = 'difficulty_selection'
                 # Difficulty selection screen
@@ -940,6 +1009,10 @@ def run_game():
                             story_error = None
                             story_stream_pos = 0  # Reset streaming position
                             story_stream_start_time = None  # Reset streaming timer
+                            opening_image = None  # Reset images
+                            ending_image = None
+                            opening_image_surface = None
+                            ending_image_surface = None
                             window = pygame.display.set_mode((STORY_WIDTH, STORY_HEIGHT), pygame.RESIZABLE)
                             current_width = STORY_WIDTH
                             current_height = STORY_HEIGHT
@@ -996,11 +1069,26 @@ def run_game():
 
                                     def load_ending_story():
                                         nonlocal ending_story, story_loading, story_error, game_state
+                                        nonlocal ending_image, ending_image_surface, image_loading
                                         try:
                                             player_won = (grid.victor == 'Player')
                                             ending_story = story_gen.generate_ending_story(
                                                 opening_story, player_won
                                             )
+                                            # Generate image for ending story
+                                            image_loading = True
+                                            try:
+                                                ending_image = generate_mission_image(ending_story, "outcome")
+                                                if ending_image is None:
+                                                    ending_image = generate_mission_image_simple(ending_story, "outcome")
+                                                if ending_image:
+                                                    ending_image_surface = pil_to_surface(ending_image, 800, 400)
+                                            except Exception as e:
+                                                print(f"Error generating ending image: {e}")
+                                                ending_image = generate_mission_image_simple(ending_story, "outcome")
+                                                if ending_image:
+                                                    ending_image_surface = pil_to_surface(ending_image, 800, 400)
+                                            image_loading = False
                                             story_loading = False
                                             game_state = 'story_ending'
                                         except Exception as e:
@@ -1021,11 +1109,26 @@ def run_game():
 
                                     def load_ending_story():
                                         nonlocal ending_story, story_loading, story_error, game_state
+                                        nonlocal ending_image, ending_image_surface, image_loading
                                         story_loading = True
                                         try:
                                             ending_story = story_gen.generate_ending_story(
                                                 opening_story, False
                                             )
+                                            # Generate image for ending story
+                                            image_loading = True
+                                            try:
+                                                ending_image = generate_mission_image(ending_story, "outcome")
+                                                if ending_image is None:
+                                                    ending_image = generate_mission_image_simple(ending_story, "outcome")
+                                                if ending_image:
+                                                    ending_image_surface = pil_to_surface(ending_image, 800, 400)
+                                            except Exception as e:
+                                                print(f"Error generating ending image: {e}")
+                                                ending_image = generate_mission_image_simple(ending_story, "outcome")
+                                                if ending_image:
+                                                    ending_image_surface = pil_to_surface(ending_image, 800, 400)
+                                            image_loading = False
                                             story_loading = False
                                             game_state = 'story_ending'
                                         except Exception as e:
@@ -1058,9 +1161,24 @@ def run_game():
                 
                 def load_ending_story():
                     nonlocal ending_story, story_loading, story_error, game_state
+                    nonlocal ending_image, ending_image_surface, image_loading
                     story_loading = True
                     try:
                         ending_story = story_gen.generate_ending_story(opening_story, False)
+                        # Generate image for ending story
+                        image_loading = True
+                        try:
+                            ending_image = generate_mission_image(ending_story, "outcome")
+                            if ending_image is None:
+                                ending_image = generate_mission_image_simple(ending_story, "outcome")
+                            if ending_image:
+                                ending_image_surface = pil_to_surface(ending_image, 800, 400)
+                        except Exception as e:
+                            print(f"Error generating ending image: {e}")
+                            ending_image = generate_mission_image_simple(ending_story, "outcome")
+                            if ending_image:
+                                ending_image_surface = pil_to_surface(ending_image, 800, 400)
+                        image_loading = False
                         story_loading = False
                         game_state = 'story_ending'
                     except Exception as e:
@@ -1099,12 +1217,27 @@ def run_game():
 
                 def load_ending_story():
                     nonlocal ending_story, story_loading, story_error, game_state
+                    nonlocal ending_image, ending_image_surface, image_loading
                     story_loading = True
                     try:
                         player_won = grid.victor == 'Player'
                         ending_story = story_gen.generate_ending_story(
                             opening_story, player_won
                         )
+                        # Generate image for ending story
+                        image_loading = True
+                        try:
+                            ending_image = generate_mission_image(ending_story, "outcome")
+                            if ending_image is None:
+                                ending_image = generate_mission_image_simple(ending_story, "outcome")
+                            if ending_image:
+                                ending_image_surface = pil_to_surface(ending_image, 800, 400)
+                        except Exception as e:
+                            print(f"Error generating ending image: {e}")
+                            ending_image = generate_mission_image_simple(ending_story, "outcome")
+                            if ending_image:
+                                ending_image_surface = pil_to_surface(ending_image, 800, 400)
+                        image_loading = False
                         game_state = 'story_ending'
                     except Exception as e:
                         story_error = str(e)
@@ -1115,6 +1248,9 @@ def run_game():
             else:
                 grid.player_turn = True  # Switch back to player
             ai_turn_pending = False
+        # Reset transient UI references
+        begin_button_rect = None
+
         # Rendering
         window.fill(BLACK)  # Cyberpunk black background
         # Add scanline overlay for CRT effect
@@ -1172,11 +1308,51 @@ def run_game():
                     # Blink cursor (every 500ms)
                     if (pygame.time.get_ticks() // 500) % 2 == 0:
                         window.blit(cursor_surf, (cursor_x, y_offset - 30))
+                
+                # Display mission briefing image below text
+                image_y = y_offset + 20
+                image_height = 0
+                if opening_image_surface:
+                    # Center the image horizontally
+                    img_width, img_height = opening_image_surface.get_size()
+                    img_x = (current_width - img_width) // 2
+                    # Draw border around image
+                    border_rect = pygame.Rect(img_x - 6, image_y - 6, img_width + 12, img_height + 12)
+                    pygame.draw.rect(window, CYAN_500, border_rect, 4)
+                    window.blit(opening_image_surface, (img_x, image_y))
+                    image_height = img_height
+                else:
+                    # Draw animated placeholder while image loads
+                    placeholder_width = min(current_width - 100, 800)
+                    placeholder_height = 320
+                    placeholder_x = (current_width - placeholder_width) // 2
+                    placeholder_rect = pygame.Rect(
+                        placeholder_x,
+                        image_y,
+                        placeholder_width,
+                        placeholder_height
+                    )
+                    pulse = (pygame.time.get_ticks() // 120) % 6
+                    border_thickness = 2 + pulse
+                    pygame.draw.rect(window, CYAN_500, placeholder_rect, border_thickness)
+                    # Draw horizontal scan lines for CRT effect
+                    for line_y in range(placeholder_rect.top + 10, placeholder_rect.bottom, 20):
+                        pygame.draw.line(
+                            window,
+                            CYAN_700,
+                            (placeholder_rect.left + 10, line_y),
+                            (placeholder_rect.right - 10, line_y),
+                            1
+                        )
+                    image_height = placeholder_height
+                
                 # Begin mission button with cyberpunk styling
-                begin_rect = (current_width // 2 - 100, current_height - 80, 200, 50)
+                button_y = image_y + image_height + 40
+                begin_rect = (current_width // 2 - 100, button_y, 200, 50)
                 mouse_pos = pygame.mouse.get_pos()
                 is_hovered = check_button_click(mouse_pos[0], mouse_pos[1], begin_rect)
                 draw_cyberpunk_button(window, begin_rect, "BEGIN MISSION", button_font, is_hovered, 'green')
+                begin_button_rect = begin_rect
         elif game_state == 'loading_ending':
             # Show loading screen while generating ending story
             loading_text = prompt_font.render(">> ANALYZING_OUTCOME...", True, CYAN_400)
@@ -1231,9 +1407,28 @@ def run_game():
                     # Blink cursor (every 500ms)
                     if (pygame.time.get_ticks() // 500) % 2 == 0:
                         window.blit(cursor_surf, (cursor_x, y_offset - 30))
+                
+                # Display mission outcome image below text
+                image_y = y_offset + 20
+                if ending_image_surface:
+                    # Center the image horizontally
+                    img_width, img_height = ending_image_surface.get_size()
+                    img_x = (current_width - img_width) // 2
+                    # Draw border around image (color based on outcome)
+                    border_color = GREEN_500 if grid.victor == 'Player' else RED_500
+                    border_rect = pygame.Rect(img_x - 6, image_y - 6, img_width + 12, img_height + 12)
+                    pygame.draw.rect(window, border_color, border_rect, 4)
+                    window.blit(ending_image_surface, (img_x, image_y))
+                elif image_loading:
+                    # Show loading indicator for image
+                    loading_img_text = story_font.render(">> GENERATING_IMAGE...", True, CYAN_700)
+                    loading_img_rect = loading_img_text.get_rect(center=(current_width // 2, image_y + 100))
+                    window.blit(loading_img_text, loading_img_rect)
+                
                 # New Mission and Quit buttons with cyberpunk styling
-                new_mission_rect = (current_width // 2 - 210, current_height - 80, 180, 50)
-                quit_rect = (current_width // 2 + 30, current_height - 80, 180, 50)
+                button_y = image_y + (ending_image_surface.get_height() + 40 if ending_image_surface else 100)
+                new_mission_rect = (current_width // 2 - 210, button_y, 180, 50)
+                quit_rect = (current_width // 2 + 30, button_y, 180, 50)
                 mouse_pos = pygame.mouse.get_pos()
                 is_new_hovered = check_button_click(mouse_pos[0], mouse_pos[1], new_mission_rect)
                 is_quit_hovered = check_button_click(mouse_pos[0], mouse_pos[1], quit_rect)

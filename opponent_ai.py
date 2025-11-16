@@ -14,7 +14,7 @@ Personalities:
 """
 
 import random
-from config import USE_VERTEX_AI, GEMINI_API_KEY, PROJECT_ID, LOCATION
+from config import USE_VERTEX_AI, GEMINI_API_KEY, PROJECT_ID, LOCATION, GEMINI_MODEL
 
 if USE_VERTEX_AI:
     import vertexai
@@ -32,7 +32,20 @@ class OpponentAI:
     
     def __init__(self):
         """Initialize the opponent AI."""
-        self.model_name = "gemini-2.0-flash-exp"
+        # Start with configured model, but maintain fallbacks
+        self.model_name = GEMINI_MODEL or "gemini-2.0-flash-exp"
+        if USE_VERTEX_AI:
+            self.model_names = [
+                self.model_name,
+                "gemini-1.5-flash",
+                "gemini-1.5-pro",
+            ]
+        else:
+            self.model_names = [
+                self.model_name,
+                "gemini-2.0-flash-exp",
+                "gemini-1.5-flash",
+            ]
         self.personality = None  # 'honest', 'deceptive', or '50-50'
         self.my_item = None  # What AI is hiding (e.g., "archive")
         self.my_item_location = None  # Grid number where AI hid its item
@@ -150,6 +163,40 @@ INSTRUCTIONS:
 
 Respond naturally as if you're a sentient opponent in this scenario."""
 
+    def _generate_text(self, prompt, max_output_tokens=150, temperature=0.9):
+        """
+        Try generating text with preferred model order, gracefully fallback on quota errors.
+        """
+        last_error = None
+        for name in self.model_names:
+            try:
+                if USE_VERTEX_AI:
+                    model = GenerativeModel(name)
+                    resp = model.generate_content(
+                        prompt,
+                        generation_config={
+                            "max_output_tokens": max_output_tokens,
+                            "temperature": temperature,
+                        },
+                    )
+                    if resp and getattr(resp, "text", None):
+                        return resp.text.strip()
+                else:
+                    model = genai.GenerativeModel(name)
+                    resp = model.generate_content(
+                        prompt,
+                        generation_config={
+                            "max_output_tokens": max_output_tokens,
+                            "temperature": temperature,
+                        },
+                    )
+                    if resp and getattr(resp, "text", None):
+                        return resp.text.strip()
+            except Exception as exc:
+                last_error = str(exc)
+                continue
+        return None
+
     def generate_response(self, player_message):
         """
         Generate a response to the player's message.
@@ -160,38 +207,21 @@ Respond naturally as if you're a sentient opponent in this scenario."""
         Returns:
             AI's response as a string
         """
-        try:
-            system_prompt = self._build_system_prompt()
-            
-            # Build conversation context
-            conversation = f"Player: {player_message}\nAI Opponent:"
-            
-            if USE_VERTEX_AI:
-                model = GenerativeModel(self.model_name)
-                response = model.generate_content(
-                    f"{system_prompt}\n\n{conversation}",
-                    generation_config={"max_output_tokens": 150, "temperature": 0.9}
-                )
-                ai_response = response.text.strip()
-            else:
-                model = genai.GenerativeModel(self.model_name)
-                response = model.generate_content(
-                    f"{system_prompt}\n\n{conversation}",
-                    generation_config={"max_output_tokens": 150, "temperature": 0.9}
-                )
-                ai_response = response.text.strip()
-            
-            # Store in chat history
-            self.chat_history.append(("player", player_message))
-            self.chat_history.append(("ai", ai_response))
-            
-            return ai_response
-        
-        except Exception as e:
-            error_msg = f"Error: {str(e)}"
-            self.chat_history.append(("player", player_message))
-            self.chat_history.append(("ai", error_msg))
-            return error_msg
+        system_prompt = self._build_system_prompt()
+        conversation = f"Player: {player_message}\nAI Opponent:"
+        text = self._generate_text(f"{system_prompt}\n\n{conversation}")
+        # Store in chat history
+        self.chat_history.append(("player", player_message))
+        if text:
+            self.chat_history.append(("ai", text))
+            return text
+        # Friendly fallback message instead of raw JSON
+        fallback = (
+            "Interference on the comms... bandwidth is throttled. "
+            "I won't make it easy for you, operative."
+        )
+        self.chat_history.append(("ai", fallback))
+        return fallback
     
     def decide_next_move(self, unrevealed_grids):
         """
@@ -223,29 +253,12 @@ Respond naturally as if you're a sentient opponent in this scenario."""
                 f"Based on your strategy, which ONE grid number would you search? "
                 f"Respond with ONLY the grid number, nothing else."
             )
-            
-            if USE_VERTEX_AI:
-                model = GenerativeModel(self.model_name)
-                response = model.generate_content(
-                    f"{system_prompt}\n\n{prompt}",
-                    generation_config={"max_output_tokens": 10, "temperature": 0.7}
-                )
-                choice_text = response.text.strip()
-            else:
-                model = genai.GenerativeModel(self.model_name)
-                response = model.generate_content(
-                    f"{system_prompt}\n\n{prompt}",
-                    generation_config={"max_output_tokens": 10, "temperature": 0.7}
-                )
-                choice_text = response.text.strip()
-            
-            # Extract grid number from response
-            grid_choice = int(''.join(filter(str.isdigit, choice_text)))
-            
-            # Validate it's in valid targets (excludes AI's own location)
-            if grid_choice in valid_targets:
-                return grid_choice
-        except:
+            choice_text = self._generate_text(f"{system_prompt}\n\n{prompt}", max_output_tokens=10, temperature=0.7)
+            if choice_text:
+                grid_choice = int(''.join(filter(str.isdigit, choice_text)))
+                if grid_choice in valid_targets:
+                    return grid_choice
+        except Exception:
             pass
         
         # Fallback to random choice (from valid targets only)

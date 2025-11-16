@@ -26,13 +26,22 @@ class StoryGenerator:
         if USE_VERTEX_AI:
             # Initialize Vertex AI
             vertexai.init(project=PROJECT_ID, location=LOCATION)
-            self.model = GenerativeModel(GEMINI_MODEL)
             self.use_vertex = True
+            # Preferred model order (primary + fallbacks)
+            self.model_names = [
+                GEMINI_MODEL,
+                "gemini-1.5-pro-preview-0409",
+                "gemini-1.5-flash",
+            ]
         else:
             # Initialize Google AI Studio
             genai.configure(api_key=GEMINI_API_KEY)
-            self.model = genai.GenerativeModel(GEMINI_MODEL)
             self.use_vertex = False
+            self.model_names = [
+                GEMINI_MODEL,
+                "gemini-2.0-flash-exp",
+                "gemini-1.5-flash",
+            ]
 
     def generate_opening_story(self):
         """
@@ -92,12 +101,7 @@ END with immediate call to action: "Your mission begins now." or "Time is runnin
         # Combine system context with prompt
         full_prompt = f"{system_context}\n\n{prompt}"
         
-        if self.use_vertex:
-            response = self.model.generate_content(full_prompt)
-            text = response.text.strip()
-        else:
-            response = self.model.generate_content(full_prompt)
-            text = response.text.strip()
+        text = self._generate_text(full_prompt)
         
         # Parse the structured response
         return self._parse_opening_response(text)
@@ -181,10 +185,34 @@ Write the aftermath directly. No preamble like "here's the ending" - just the mi
         # Combine system context with prompt
         full_prompt = f"{system_context}\n\n{prompt}"
         
-        if self.use_vertex:
-            response = self.model.generate_content(full_prompt)
-            return response.text.strip()
-        else:
-            response = self.model.generate_content(full_prompt)
-            return response.text.strip()
+        return self._generate_text(full_prompt)
+
+    def _generate_text(self, prompt):
+        """
+        Try generating text using preferred models with graceful fallback.
+
+        Args:
+            prompt: Prompt string to send to the model
+
+        Returns:
+            Generated text string
+
+        Raises:
+            RuntimeError if all models fail
+        """
+        last_error = None
+        for model_name in self.model_names:
+            try:
+                if self.use_vertex:
+                    model = GenerativeModel(model_name)
+                    response = model.generate_content(prompt)
+                else:
+                    model = genai.GenerativeModel(model_name)
+                    response = model.generate_content(prompt)
+                if response and getattr(response, "text", None):
+                    return response.text.strip()
+            except Exception as exc:
+                last_error = f"{model_name}: {exc}"
+                continue
+        raise RuntimeError(last_error or "All Gemini text models failed")
 

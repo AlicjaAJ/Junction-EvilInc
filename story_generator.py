@@ -30,8 +30,8 @@ class StoryGenerator:
             # Preferred model order (primary + fallbacks)
             self.model_names = [
                 GEMINI_MODEL,
-                "gemini-1.5-pro-preview-0409",
-                "gemini-1.5-flash",
+                "gemini-2.0-flash-lite",
+                "gemini-2.5-flash-lite",
             ]
         else:
             # Initialize Google AI Studio
@@ -40,7 +40,7 @@ class StoryGenerator:
             self.model_names = [
                 GEMINI_MODEL,
                 "gemini-2.0-flash-exp",
-                "gemini-1.5-flash",
+                "gemini-2.0-flash-lite",
             ]
 
     def generate_opening_story(self):

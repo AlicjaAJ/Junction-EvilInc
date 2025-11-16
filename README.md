@@ -1,4 +1,4 @@
-# Junction-EvilInc
+# THE QUENN OF HEARTS
 
 Have you ever imagined stretching a simple idea into an enormous, constantly evolving challenge through skillful AI implementation? If you have, sorry... we did it first!
 
@@ -71,10 +71,9 @@ Masterfully tailored to your profile, each conclusion is individual and unique t
 This project features a DEMO of the revolutionary video game, The Queen of Hearts, addressing the challenge posed by Supercell during the 2025 Junction: Utopia and Dystopia.
 
 The demo provides a focused look at the following features of the game:
-- 7 rounds game: Experience the increasing difficulty across all 7 levels, including grid size increases and increasing number of available LLM roles, staring from simplest        always Lies/ always Tells the Truths/ does 50:50.
-- Psychological Dialogue: Engage in the core mechanic where your dialogue is constantly scored by the ML system to create tailored LLM models which constantly try to trick you     into loosing.
-- Dynamic Weakness System: Witness the AI's evolution as it learns about the player's weaknesses and develops one "evolution" to cover its own weakness for the next round. (is it good ?????)
-- Engaging Stories: Collect storytelling Easter Eggs hidden as objects on the grid in each of the 7 levels, piecing together the unique narrative.
-- Tailored Ending: Receive your individual, LLM-generated ending, which is based not on your choices, but on the ML interpretation of your core profile (Lies and Beliefs).
+- On loop experience from an exemplary level, with possibility of choosing the difficulty and compeete with three of our models: the one which always Lies/ always Tells the Truths/ does 50:50.
+- Psychological Dialogue: Engage in the core mechanic where your dialogue is constantly scored by the ML system to create tailored LLM models which constantly try to trick you into loosing.
+- Stunning visuals, based on 90s games.
+- Unique stories which make every round unique. 
 
 

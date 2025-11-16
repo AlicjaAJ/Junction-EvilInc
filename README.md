@@ -169,10 +169,10 @@ The demo provides a focused look at the following features of the game:
 - Stunning visuals, based on 90s games.
 - Unique stories which make every round unique.
 
-<img width="906" height="737" alt="Screenshot 2025-11-16 at 09 15 32" src="https://github.com/user-attachments/assets/817bed8c-d407-47d6-8d43-e0d3b8961432" />
+<img width="902" height="735" alt="Screenshot 2025-11-16 at 09 14 05" src="https://github.com/user-attachments/assets/646e278c-e5cb-4fa7-a2d1-b5af00895774" />
 <img width="903" height="735" alt="Screenshot 2025-11-16 at 09 15 06" src="https://github.com/user-attachments/assets/7c12ae10-a595-422e-9b00-bdba05e49ae2" />
 <img width="906" height="734" alt="Screenshot 2025-11-16 at 09 14 16" src="https://github.com/user-attachments/assets/70984939-f998-4c90-9001-6aa6d4ec7b73" />
-<img width="902" height="735" alt="Screenshot 2025-11-16 at 09 14 05" src="https://github.com/user-attachments/assets/646e278c-e5cb-4fa7-a2d1-b5af00895774" />
+<img width="906" height="737" alt="Screenshot 2025-11-16 at 09 15 32" src="https://github.com/user-attachments/assets/817bed8c-d407-47d6-8d43-e0d3b8961432" />
 
 =======
 **Security Note:** The `.env` file is excluded from version control. Never commit your API keys.

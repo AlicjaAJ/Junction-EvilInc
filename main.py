@@ -312,9 +312,9 @@ class Grid:
                     return self.get_grid_number(x, y)
         return None
 
-    def draw(self, surface, font, small_font, x_offset=0, y_offset=0):
+    def draw(self, surface, font, small_font, x_offset=0, y_offset=0, mouse_pos=None):
         """
-        Render the grid with cyberpunk CRT styling.
+        Render the grid with cyberpunk CRT styling and highlight the cell under the mouse.
 
         Args:
             surface: Pygame surface to draw on
@@ -322,7 +322,20 @@ class Grid:
             small_font: Font for grid numbers
             x_offset: Horizontal offset for centering the grid
             y_offset: Vertical offset for centering the grid
+            mouse_pos: Optional (x, y) tuple for mouse position in pixels.
+                    If None, uses pygame.mouse.get_pos().
         """
+        # Get mouse position
+        if mouse_pos is None:
+            mouse_pos = pygame.mouse.get_pos()
+        mx, my = mouse_pos
+
+        # Compute which grid cell (if any) the mouse is over
+        hover_col = (mx - x_offset) // self.cell_size
+        hover_row = (my - y_offset) // self.cell_size
+        if hover_col < 0 or hover_col >= self.width or hover_row < 0 or hover_row >= self.height:
+            hover_col = hover_row = None
+
         # Draw outer glow border around entire grid
         grid_outer_rect = pygame.Rect(
             x_offset - 6, y_offset - 6,
@@ -335,7 +348,7 @@ class Grid:
             glow_surf.set_alpha(alpha)
             glow_surf.fill(CYAN_500)
             surface.blit(glow_surf, (grid_outer_rect.x - i, grid_outer_rect.y - i))
-        
+
         # Draw thick cyan border around grid
         pygame.draw.rect(surface, CYAN_500, grid_outer_rect, 6)
 
@@ -349,7 +362,10 @@ class Grid:
                     self.cell_size,
                     self.cell_size
                 )
-                
+
+                # Is this the hovered cell?
+                is_hover = (hover_col is not None and hover_row is not None and x == hover_col and y == hover_row)
+
                 # Determine cell color and border
                 if cell.revealed:
                     # Green if bomb found (winning reveal)
@@ -364,27 +380,41 @@ class Grid:
                     else:
                         color = RED_500
                         border_color = RED_600
-                    
+
                     # Draw filled cell
                     pygame.draw.rect(surface, color, rect)
                     # Draw thick border
                     pygame.draw.rect(surface, border_color, rect, 4)
-                    
+
                     # Draw bomb letter if cell contains a bomb
                     if cell.item_type:
                         text = font.render(cell.item_type[0], True, BLACK)
                         text_rect = text.get_rect(center=rect.center)
                         surface.blit(text, text_rect)
+
+                    # If hovered and already revealed, add a subtle highlight border
+                    if is_hover:
+                        pygame.draw.rect(surface, CYAN_500, rect, 2)
+
                 else:
                     # Unrevealed cell - black with cyan border
                     pygame.draw.rect(surface, BLACK, rect)
                     pygame.draw.rect(surface, CYAN_700, rect, 4)
-                    
+
                     # Draw grid number in top-left corner
                     grid_num = self.get_grid_number(x, y)
                     num_text = small_font.render(str(grid_num), True, CYAN_700)
                     surface.blit(num_text, (rect.x + 4, rect.y + 4))
 
+                    # If hovered and unrevealed, draw a semi-transparent cyan overlay
+                    if is_hover:
+                        # Create a small alpha surface to overlay highlight (SRCALPHA needed for alpha)
+                        hover_surf = pygame.Surface((self.cell_size, self.cell_size), pygame.SRCALPHA)
+                        # RGBA: cyan-ish with low alpha for subtle highlight
+                        hover_surf.fill((0, 255, 255, 40))  # last number is alpha (0-255)
+                        surface.blit(hover_surf, rect.topleft)
+                        # Optional: draw a slightly brighter border for hovered cell
+                        pygame.draw.rect(surface, CYAN_500, rect, 3)
 
 
 
@@ -1504,8 +1534,9 @@ def run_game():
             window.blit(prompt_surf, (prompt_x, grid_y_offset - 45))
             
             # Draw grid
-            grid.draw(window, font, small_font, grid_x_offset, grid_y_offset)
-            
+            #grid.draw(window, font, small_font, grid_x_offset, grid_y_offset)
+            grid.draw(window, font, small_font, grid_x_offset, grid_y_offset, pygame.mouse.get_pos())
+
             # Draw chat sidebar on the right
             chat_x = grid_x_offset + grid_pixel_width + 10
             chat_width = min(CHAT_PANEL_WIDTH, current_width - chat_x - 10)

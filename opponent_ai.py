@@ -37,14 +37,14 @@ class OpponentAI:
         if USE_VERTEX_AI:
             self.model_names = [
                 self.model_name,
-                "gemini-1.5-flash",
-                "gemini-1.5-pro",
+                "gemini-2.0-flash-lite",
+                "gemini-2.5-flash-lite",
             ]
         else:
             self.model_names = [
                 self.model_name,
                 "gemini-2.0-flash-exp",
-                "gemini-1.5-flash",
+                "gemini-2.0-flash-lite",
             ]
         self.personality = None  # 'honest', 'deceptive', or '50-50'
         self.my_item = None  # What AI is hiding (e.g., "archive")
